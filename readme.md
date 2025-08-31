@@ -30,6 +30,7 @@ No Tesseract/EasyOCR needed—the script sends each screenshot to your vision mo
 
 * [**Python 3.9+** (3.10/3.11 OK)](https://www.python.org/downloads/)
 * [**pip** (or uv/pipx)](https://pip.pypa.io/en/stable/installation/)
+* [**git**](https://git-scm.com/downloads) – to clone the repo (optional, see below for ZIP download)
 * A **vision-capable** model exposed via an **OpenAI-compatible** API
   ([OpenAI “GPT-4o”](https://platform.openai.com/docs/models), [Groq vision models](https://console.groq.com/docs/vision), [OpenRouter](https://openrouter.ai/models), or a local OpenAI bridge).
 
@@ -59,19 +60,35 @@ python d2r_tooltip_vision_client.py "C:\Users\<you>\Documents\Diablo II Resurrec
 
 ## Installation
 
+You can either **clone with git** (recommended) or **download as ZIP**.
+
+### Option 1: Clone with git
+
 ```bash
-# 1) clone
 git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
 cd D2R-AI-Item-Tracker
+```
 
-# 2) virtual env (recommended)
+### Option 2: Download ZIP
+
+1. Go to [the repo page](https://github.com/vdamov/D2R-AI-Item-Tracker)
+2. Click **Code → Download ZIP**
+3. Extract the ZIP somewhere on your machine
+4. Open a terminal in that folder
+
+---
+
+### Set up environment
+
+```bash
+# 1) create virtual environment
 python -m venv venv
 # Windows (PowerShell)
 .\venv\Scripts\Activate.ps1
 # macOS/Linux
 source venv/bin/activate
 
-# 3) deps
+# 2) install dependencies
 pip install -r requirements.txt
 ```
 
