@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+dist/
+build/
+venv/
+.env/
+
+# Project-specific
+*.txt
+
+# IDEs
+.vscode/
+.idea/
+
+# Exclude
+!requirements.txt
