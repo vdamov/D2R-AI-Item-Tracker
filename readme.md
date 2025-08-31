@@ -1,19 +1,28 @@
 # D2R Tooltip OCR via Vision LLM (OpenAI-compatible)
 
-Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a **Vision LLM** served over an **OpenAI-compatible** API (e.g., **Groq**, OpenRouter, vLLM/LM Studio/Ollama OpenAI bridge).
-No Tesseract/EasyOCR needed—the script sends the screenshot to your vision model, and concatenates all outputs separated by `---`.
+> ⚠️ **AI-generated project notice**: this README and script were written with help from an AI assistant. If something looks *too polished*, it probably is—try it anyway. 😉
+
+Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a **Vision LLM** behind an **OpenAI-compatible** API (OpenAI, Groq, OpenRouter, LM Studio/Ollama OpenAI bridge, etc.).
+No Tesseract/EasyOCR needed—the script sends each screenshot to your vision model and concatenates all outputs separated by `---`.
 
 ---
 
-## Features
+## What it does
 
-* 🧠 Sends the crop to an **OpenAI-compatible** `/v1/chat/completions` endpoint.
+* 🧠 Calls an **OpenAI-compatible** `POST /v1/chat/completions` with the screenshot encoded as a **base64 data URI**.
 * 🧾 Returns the **raw tooltip text** (line breaks preserved).
-* 🧹 Optionally **removes footer UI lines** like:
+* 🧹 Removes common footer UI lines:
 
   * `Shift + Left Click to Unequip`
   * `Ctrl + Left Click to Move`
-* 🗂 Processes a whole folder of screenshots into **one output.txt** (`---` between items).
+  * `Shift + Left Click to Equip`
+  * `Hold Shift to Compare`
+  * `Left Click to Cast`
+* 🧯 Prompted to **exclude the “other set items” list** at the bottom of set items.
+* 🚦 Built-in **rate limiter** to avoid 429s (RPM & jitter configurable).
+* 🔁 Processes a whole folder into **one `output.txt`** (`---` between items) with a progress bar.
+
+> Note: this version sends the **full screenshot** to the model (no local cropping). Most vision models read the tooltip cleanly; the prompt asks to ignore non-tooltip text.
 
 ---
 
@@ -21,32 +30,30 @@ No Tesseract/EasyOCR needed—the script sends the screenshot to your vision mod
 
 * **Python 3.9+** (3.10/3.11 OK)
 * **pip** (or uv/pipx)
-* A **Vision-capable model** exposed via an **OpenAI-compatible** API
-
-  * Example: **Groq** (OpenAI-compatible endpoint)
-  * Note: not all providers/models support image inputs—ensure the model you select supports images.
+* A **vision-capable** model exposed via an **OpenAI-compatible** API
+  (OpenAI “GPT-4o”, Groq vision models, OpenRouter, or a local OpenAI bridge).
 
 ---
 
 ## Installation
 
 ```bash
-# 1) clone your repo
+# 1) clone
 git clone <your-fork-url>
-cd D2R-AI-Item-Tracker   # or your repo folder
+cd D2R-AI-Item-Tracker
 
-# 2) create & activate venv (recommended)
+# 2) virtual env (recommended)
 python -m venv venv
-# Windows (PowerShell):
+# Windows (PowerShell)
 .\venv\Scripts\Activate.ps1
-# macOS/Linux:
+# macOS/Linux
 source venv/bin/activate
 
-# 3) install python deps
+# 3) deps
 pip install -r requirements.txt
 ```
 
-Your `requirements.txt` should include:
+`requirements.txt`:
 
 ```
 opencv-python
@@ -54,39 +61,45 @@ numpy
 Pillow
 requests
 python-dotenv
+tqdm
 ```
 
 ---
 
-## Using Groq (OpenAI-compatible)
+## Configure `.env`
 
-You can use **Groq** as the backend.
+Create a `.env` in the repo root. You can point it at **OpenAI**, **Groq**, or another OpenAI-compatible router.
 
-### 1) Create an account & get an API key
-
-* Go to **[https://console.groq.com](https://console.groq.com)** and sign in/sign up.
-* Open **API Keys** and **create a key** (free tier is available for testing).
-* Copy the key (looks like `gsk_...`).
-
-> **Note:** Groq’s model catalog changes; verify that the **model** you select supports **image inputs** via the OpenAI-compatible API. If image input isn’t supported on your chosen model, use another provider (e.g., OpenRouter) or a local OpenAI-compatible server that serves a vision model.
-
-### 2) Configure `.env`
-
-Create a file named `.env` in the project root:
+### OpenAI example
 
 ```env
-# OpenAI-compatible endpoint (Groq)
-VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions
+VISION_ENDPOINT=https://api.openai.com/v1/chat/completions
+VISION_MODEL=gpt-4o
+VISION_API_KEY=sk-your-openai-key
 
-# A model name your endpoint exposes (must support images)
-# Example placeholder:
-VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+# Optional tuning
+MAX_WORKERS=1          # keep 1 for strict RPM limits
+MAX_RETRIES=3
+RETRY_DELAY=10
+REQUEST_TIMEOUT=120
 
-# Your API key from https://console.groq.com (keep it secret)
-VISION_API_KEY=gsk_your_key_here
+# Rate limiting (helps avoid 429s)
+RATE_LIMIT_RPM=30      # requests per minute
+RATE_JITTER_MS=200     # small random delay to avoid bursts
 ```
 
-> If you later switch providers (OpenRouter, etc.), change `VISION_ENDPOINT` and `VISION_MODEL` accordingly.
+### Groq example
+
+```env
+VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions
+VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+VISION_API_KEY=gsk_your_key_here
+MAX_WORKERS=1
+RATE_LIMIT_RPM=30
+RATE_JITTER_MS=200
+```
+
+> Make sure the model you pick **accepts images** in the chat API.
 
 ---
 
@@ -100,22 +113,26 @@ python d2r_tooltip_vision_client.py "C:\Users\<you>\Documents\Diablo II Resurrec
 python d2r_tooltip_vision_client.py "/Users/<you>/Library/Application Support/Blizzard/Diablo II Resurrected/Screenshots" output.txt
 ```
 
-* The script walks the folder (`.png`, `.jpg`, `.jpeg`), crops each tooltip, sends it to your Vision LLM, and writes a single **output.txt**.
+* The script scans the folder for `.png/.jpg/.jpeg`, sends each screenshot to your Vision LLM, and writes **`output.txt`**.
 * Each item block is separated by:
 
-  ```
-  ---
-  ```
+```
+---
+```
 
 ---
 
-## Configuration (inside the script)
+## Environment knobs (mapped to code)
 
-* `SYSTEM_PROMPT` / `USER_PROMPT` – steer the model to output **only** tooltip text.
-* The detector (`find_tooltip_panel`) masks dark/low-sat panels and scores candidates by size/shape; tweak thresholds if your UI theme differs.
-* `clean_output()` removes common footer lines (Unequip/Move).
-
-If you find the crop is wrong (e.g., it picked the stash panel), tighten the **area range** or use the improved scoring approach (prefer \~10% of screen area, verify text density). You can also add **debug dumps** of the cropped ROI to see what’s being sent.
+* `VISION_ENDPOINT` – OpenAI-compatible `/v1/chat/completions`
+* `VISION_MODEL` – model id exposed by your endpoint (must support **images**)
+* `VISION_API_KEY` – your key/token
+* `MAX_WORKERS` – concurrent images (keep **1** for strict RPMs)
+* `MAX_RETRIES` – request retries on network/5xx
+* `RETRY_DELAY` – backoff base (seconds)
+* `REQUEST_TIMEOUT` – per request timeout (seconds)
+* `RATE_LIMIT_RPM` – requests per minute (global, thread-safe)
+* `RATE_JITTER_MS` – small random delay added after each request
 
 ---
 
@@ -141,6 +158,28 @@ ADDS 1-511 LIGHTNING DAMAGE
 -15% TO ENEMY LIGHTNING RESISTANCE
 +3 TO LIGHTNING BOLT (AMAZON ONLY)
 ---
+THUNDERSTROKE
+MATRIARCHAL JAVELIN
+THROW DAMAGE: 103 TO 195
+ONE-HAND DAMAGE: 88 TO 159
+QUANTITY: 120 OF 120
+(AMAZON ONLY)
+REQUIRED DEXTERITY: 151
+REQUIRED STRENGTH: 107
+REQUIRED LEVEL: 69
+
+JAVELIN CLASS - VERY FAST ATTACK SPEED
+20% CHANCE TO CAST LEVEL 14 LIGHTNING ON STRIKING
++4 TO JAVELIN AND SPEAR SKILLS (AMAZON ONLY)
++15% INCREASED ATTACK SPEED
++196% ENHANCED DAMAGE
+ADDS 1-511 LIGHTNING DAMAGE
+-15% TO ENEMY LIGHTNING RESISTANCE
++3 TO LIGHTNING BOLT (AMAZON ONLY)
+
+SHIFT + LEFT CLICK TO UNEQUIP
+CTRL + LEFT CLICK TO MOVE
+---
 ENIGMA
 Scarab Husk
 'Jah Ith Ber'
@@ -161,7 +200,6 @@ Physical Damage Received Reduced by 8%
 87% Better Chance of Getting Magic Items [based on character level]
 Increase Maximum Durability 10%
 Socketed (3)
-...
 ```
 
 ---
@@ -169,21 +207,15 @@ Socketed (3)
 ## Troubleshooting
 
 * **401/403 Unauthorized**
+  Check `VISION_API_KEY`, `VISION_ENDPOINT`, and that your model supports **image inputs**.
 
-  * Check `VISION_API_KEY` in `.env`.
-  * Ensure your endpoint is correct (`VISION_ENDPOINT`) and accepts OpenAI-style **/v1/chat/completions** calls.
+* **429 Too Many Requests**
+  Lower `MAX_WORKERS` (prefer `1`). Set `RATE_LIMIT_RPM` to your provider’s limit and keep `RATE_JITTER_MS` > 0.
 
-* **Model doesn’t accept images**
+* **Empty text**
+  Some models struggle with very small UI. Use native resolution screenshots and default UI scale. Try another vision model.
 
-  * Pick a **vision-capable** model from your provider. Some non-vision models will reject image inputs.
-  * Alternative: run a local OpenAI-compatible server that serves vision models (e.g., vLLM/LM Studio/Ollama with OpenAI bridge).
-
-* **Empty/garbled text**
-
-  * The crop might be wrong. Adjust HSV thresholds in `find_tooltip_panel` or temporarily disable cropping and let the model read a broader region.
-  * Increase screenshot clarity (native res, neutral gamma, UI scale 100–125%).
-
-* **Windows PowerShell policy blocks venv activation**
+* **PowerShell policy blocks venv activate**
 
   ```powershell
   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -193,23 +225,17 @@ Socketed (3)
 
 ## Security & Privacy
 
-* Your API key is read from `.env`. **Do not** commit `.env` to git.
-* Each image (cropped tooltip) is sent to your configured endpoint; keep that in mind for privacy.
+* `.env` holds your API key. **Do not commit it.**
+* Screenshots are sent to your configured endpoint—treat accordingly.
 
 ---
 
 ## License
 
 MIT License
-
 Copyright (c) 2025 Vladimir Damov
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+(see `LICENSE` for full text)
 
 ---
 
@@ -222,10 +248,13 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1   # or: source venv/bin/activate
 pip install -r requirements.txt
 
-# .env
+# .env (Groq example)
 echo VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions > .env
 echo VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct >> .env
 echo VISION_API_KEY=gsk_your_key_here >> .env
+echo MAX_WORKERS=1 >> .env
+echo RATE_LIMIT_RPM=30 >> .env
+echo RATE_JITTER_MS=200 >> .env
 
 python d2r_tooltip_vision_client.py "C:\Users\<you>\Documents\Diablo II Resurrected\Screenshots" output.txt
 ```
