@@ -1,5 +1,7 @@
 name: Build Executable
-
+permissions:
+  contents: write
+  
 on:
   push:
     branches: [ main, master ]
@@ -70,16 +72,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: D2R AI Item Tracker-${{ runner.os }}
-        path: dist/D2R AI Item Tracker.exe
+        path: "dist/D2R AI Item Tracker.exe"
         retention-days: 30
         
-    - name: Upload to release (if release)
+    - name: Upload to GitHub Release (if release)
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: dist/D2R AI Item Tracker.exe
-        asset_name: D2R AI Item Tracker.exe
-        asset_content_type: application/octet-stream
+        files: |
+          "dist/D2R AI Item Tracker.exe"
