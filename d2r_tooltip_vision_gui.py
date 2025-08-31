@@ -76,6 +76,7 @@ BANNED_LINES = {
     "SHIFT + LEFT CLICK TO EQUIP",
     "HOLD SHIFT TO COMPARE",
     "LEFT CLICK TO CAST",
+    "KEEP IN INVENTORY TO GAIN BONUS"
 }
 
 # Item quality colors (D2R style)

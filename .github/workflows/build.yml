@@ -56,9 +56,9 @@ jobs:
       
     - name: Verify build
       run: |
-        if (Test-Path "dist/D2R AI Item Tracker GUI.exe") {
+        if (Test-Path "dist/D2R AI Item Tracker.exe") {
           Write-Host "Build successful!"
-          $fileSize = (Get-Item "dist/D2R AI Item Tracker GUI.exe").Length / 1MB
+          $fileSize = (Get-Item "dist/D2R AI Item Tracker.exe").Length / 1MB
           Write-Host "Executable size: $([math]::Round($fileSize, 2)) MB"
         } else {
           Write-Host "ERROR: Executable not found"
@@ -80,6 +80,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: dist/D2R AI Item Tracker GUI.exe
-        asset_name: D2R AI Item Tracker GUI.exe
+        asset_path: dist/D2R AI Item Tracker.exe
+        asset_name: D2R AI Item Tracker.exe
         asset_content_type: application/octet-stream
