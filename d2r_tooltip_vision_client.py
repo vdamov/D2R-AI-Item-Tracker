@@ -4,7 +4,7 @@ import os
 import sys
 import glob
 import json
-import time
+import time as _time
 from PIL import Image
 from typing import List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,9 +16,17 @@ from tqdm import tqdm
 
 import threading
 import random
-import time
+import time as _t
 
 from dotenv import load_dotenv
+
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+
+    _TK_OK = True
+except Exception:
+    _TK_OK = False
 
 load_dotenv()
 
@@ -30,7 +38,7 @@ OPENAI_MODEL = os.getenv("VISION_MODEL", "gpt-4o")
 API_KEY = os.getenv("VISION_API_KEY")
 
 # --- Rate limit config (env overrides) ---
-RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", 30))  # e.g. Groq free tier ~30 RPM
+RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", 30))  # e.g., ~30 RPM
 RATE_JITTER_MS = int(os.getenv("RATE_JITTER_MS", 200))  # random jitter to avoid bursts
 
 SYSTEM_PROMPT = (
@@ -106,7 +114,7 @@ def call_vision_api(img_bgr: np.ndarray) -> str:
             )
             if attempt == MAX_RETRIES - 1:
                 raise
-            time.sleep(RETRY_DELAY * (attempt + 1))
+            _time.sleep(RETRY_DELAY * (attempt + 1))
         except (KeyError, IndexError) as e:
             print(
                 f"Error parsing API response: {e}. Response: {r.text}", file=sys.stderr
@@ -119,11 +127,11 @@ def rate_limit_wait():
     """Sleep to respect RPM across threads; add small jitter."""
     global _last_ts
     with _rl_lock:
-        now = time.monotonic()
+        now = _t.monotonic()
         wait = (_last_ts + _min_gap) - now
         if wait > 0:
-            time.sleep(wait)
-            now = time.monotonic()
+            _t.sleep(wait)
+            now = _t.monotonic()
         # add tiny jitter so multiple workers don't align
         now += random.uniform(0, RATE_JITTER_MS / 1000.0)
         _last_ts = now
@@ -141,18 +149,21 @@ def encode_image_to_data_uri(img_bgr: np.ndarray) -> str:
 
 def clean_output(text: str) -> str:
     """Removes common UI hint lines from the OCR output."""
-    banned = [
+    banned = {
         "SHIFT + LEFT CLICK TO UNEQUIP",
         "CTRL + LEFT CLICK TO MOVE",
         "SHIFT + LEFT CLICK TO EQUIP",
         "HOLD SHIFT TO COMPARE",
         "LEFT CLICK TO CAST",
-    ]
-    lines = [
-        ln.strip()
-        for ln in text.splitlines()
-        if ln.strip().upper() not in banned and ln.strip()
-    ]
+    }
+    lines = []
+    for ln in text.splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        if s.upper() in banned:
+            continue
+        lines.append(s)
     return "\n".join(lines)
 
 
@@ -208,21 +219,37 @@ def batch_process_folder(folder: str, exts=(".png", ".jpg", ".jpeg")) -> str:
     return "\n---\n".join(outputs)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(
-            "Usage: python d2r_tooltip_vision_client.py <folder_with_images> [output.txt]"
-        )
-        sys.exit(1)
+def _pick_folder_gui() -> str:
+    """Open a folder picker (for EXE double-click)."""
+    if not _TK_OK:
+        return ""
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("D2R AI Item Tracker", "Select your D2R Screenshots folder")
+    folder = filedialog.askdirectory(title="Select Screenshots Folder")
+    root.destroy()
+    return folder or ""
 
-    folder_path = sys.argv[1]
+
+if __name__ == "__main__":
+    # CLI path or GUI picker for .exe users
+    if len(sys.argv) >= 2:
+        folder_path = sys.argv[1]
+    else:
+        folder_path = _pick_folder_gui()
+        if not folder_path:
+            print(
+                "Usage: python d2r_tooltip_vision_client.py <folder_with_images> [output.txt]"
+            )
+            sys.exit(1)
+
     concatenated_result = batch_process_folder(folder_path)
 
     if len(sys.argv) >= 3:
         out_path = sys.argv[2]
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(concatenated_result)
-        print(f"\n✅ Saved to: {out_path}")
     else:
-        print("\n===== CONCATENATED OUTPUT =====\n")
-        print(concatenated_result)
+        out_path = os.path.join(folder_path, "output.txt")
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(concatenated_result)
+    print(f"\n✅ Saved to: {out_path}")

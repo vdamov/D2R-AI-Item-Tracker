@@ -1,0 +1,85 @@
+name: Build Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+        
+    - name: Verify files exist
+      run: |
+        if (Test-Path "d2r_tooltip_vision_gui.py") {
+          Write-Host "Main Python file found"
+        } else {
+          Write-Host "ERROR: d2r_tooltip_vision_gui.py not found"
+          exit 1
+        }
+        if (Test-Path "icon.ico") {
+          Write-Host "Icon file found"
+        } else {
+          Write-Host "WARNING: icon.ico not found, building without custom icon"
+        }
+      shell: powershell
+      
+    - name: Build executable with icon
+      if: hashFiles('icon.ico') != ''
+      run: |
+        pyinstaller --onefile --hidden-import=tkinter --name D2R-AI-Item-Tracker-GUI --icon=icon.ico d2r_tooltip_vision_gui.py
+      shell: cmd
+      
+    - name: Build executable without icon
+      if: hashFiles('icon.ico') == ''
+      run: |
+        pyinstaller --onefile --hidden-import=tkinter --name D2R-AI-Item-Tracker-GUI d2r_tooltip_vision_gui.py
+      shell: cmd
+      
+    - name: Verify build
+      run: |
+        if (Test-Path "dist/D2R-AI-Item-Tracker-GUI.exe") {
+          Write-Host "Build successful!"
+          $fileSize = (Get-Item "dist/D2R-AI-Item-Tracker-GUI.exe").Length / 1MB
+          Write-Host "Executable size: $([math]::Round($fileSize, 2)) MB"
+        } else {
+          Write-Host "ERROR: Executable not found"
+          exit 1
+        }
+      shell: powershell
+      
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: D2R-AI-Item-Tracker-GUI-${{ runner.os }}
+        path: dist/D2R-AI-Item-Tracker-GUI.exe
+        retention-days: 30
+        
+    - name: Upload to release (if release)
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: dist/D2R-AI-Item-Tracker-GUI.exe
+        asset_name: D2R-AI-Item-Tracker-GUI.exe
+        asset_content_type: application/octet-stream
