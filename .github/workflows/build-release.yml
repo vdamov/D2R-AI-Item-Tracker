@@ -1,0 +1,72 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build GUI exe
+        # avoid spaces in exe name to keep paths simple
+        run: |
+          pyinstaller --onefile --hidden-import=tkinter --icon=images/icon.ico ^
+            --name D2R-AI-Item-Tracker-GUI d2r_tooltip_vision_gui.py
+
+      - name: Verify build
+        shell: powershell
+        run: |
+          if (Test-Path "dist/D2R-AI-Item-Tracker-GUI.exe") {
+            Write-Host "OK"
+          } else {
+            Write-Error "EXE not found"
+            exit 1
+          }
+
+      - name: Upload artifact (for next job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: D2R-AI-Item-Tracker-GUI
+          path: dist/D2R-AI-Item-Tracker-GUI.exe
+          retention-days: 7
+
+  release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built exe
+        uses: actions/download-artifact@v4
+        with:
+          name: D2R-AI-Item-Tracker-GUI
+          path: .
+
+      - name: Publish GitHub Release with EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            D2R-AI-Item-Tracker-GUI.exe
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

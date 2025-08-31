@@ -39,7 +39,7 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 
 1. **Get the EXE**
    - Open the repository's [**Releases**](https://github.com/vdamov/D2R-AI-Item-Tracker/releases) page on GitHub
-   - Download and extract **`Source code (zip)`** from the latest release (Assets section)
+   - Download **`D2R AI Item Tracker.exe`** from the latest release (Assets section)
 
 2. **Run the App**
    - Double-click `D2R AI Item Tracker.exe`
