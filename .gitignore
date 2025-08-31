@@ -8,7 +8,7 @@ __pycache__/
 dist/
 build/
 venv/
-.env/
+.env
 
 # Project-specific
 *.txt
