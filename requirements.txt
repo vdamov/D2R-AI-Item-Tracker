@@ -3,4 +3,3 @@ numpy
 Pillow
 requests
 python-dotenv
-tqdm

@@ -9,6 +9,7 @@ import threading
 import queue
 import random
 import re
+import pickle
 from pathlib import Path
 
 import cv2
@@ -23,6 +24,9 @@ from tkinter import ttk, filedialog, messagebox
 
 APP_TITLE = "D2R AI Item Tracker (GUI)"
 DEFAULT_OUTPUT_NAME = "output.txt"
+CACHE_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "D2R-AI-Item-Tracker"
+CACHE_FILE = CACHE_DIR / "items_cache.pkl"
+SETTINGS_CACHE_FILE = CACHE_DIR / "settings_cache.pkl"
 
 # Load .env if present
 load_dotenv()
@@ -77,11 +81,11 @@ BANNED_LINES = {
 # Item quality colors (D2R style)
 ITEM_COLORS = {
     "normal": "#c7b377",     # White/Gray
-    "magic": "#4169e1",      # Blue
+    "magic": "#6969ff",      # Blue
     "rare": "#ffff64",       # Yellow
-    "unique": "#A59263",     # Gold
-    "set": "#32cd32",        # Green
-    "crafted": "#d38b04",    # Orange
+    "unique": "#c79c1e",     # Gold
+    "set": "#00ff00",        # Green
+    "crafted": "#ff8000",    # Orange
     "ethereal": "#c0c0c0",   # Silver/gray overlay
     "rune": "#c7b377",       # Gray
     "gem": "#c7b377",        # Gray
@@ -240,6 +244,123 @@ def call_vision_api(
             # surface raw response in GUI log helps debugging
             raise RuntimeError(f"Bad API response format: {e}")
     return ""
+
+
+# -----------------------------
+# Item List logic
+# -----------------------------
+class Item:
+    def __init__(self, text: str, source_file: str, category: str = "MISC", color: str = None):
+        self.text = text.strip()
+        self.source_file = source_file
+        self.hero_name = Path(source_file).stem
+        self.category = category.upper()
+        self.is_ethereal = "ETHEREAL" in self.text.upper()
+        
+        # These must be at the bottom since they use other properties
+        self.item_quality = self._detect_item_quality()
+        self.color = color if color else self._get_item_color()
+    
+    def _detect_item_quality(self) -> str:
+        """Detect item quality/rarity from text for color coding"""
+        text_upper = self.text.upper()
+        
+        # Runes are always gray
+        if self.category == "RUNE":
+            return "rune"
+        
+        # Gems are always gray  
+        if self.category == "GEM":
+            return "gem"
+        
+        # Check for ethereal first (affects color but not quality)
+        if "ETHEREAL" in text_upper:
+            # Ethereal items keep their base quality but get silver tint
+            pass
+            
+        # Check for specific quality indicators
+        if any(word in text_upper for word in ["UNIQUE", "LEGENDARY"]) or text_upper.startswith("UNIQUE"):
+            return "unique"
+        elif any(word in text_upper for word in ["SET ITEM", "SET:", "SET "]) or "SET" in text_upper:
+            return "set"
+        elif any(word in text_upper for word in ["CRAFTED", "CRAFT"]):
+            return "crafted"
+        elif "RARE" in text_upper or (self.category in ["WEAPON", "ARMOR"] and text_upper.count("\n") > 6):
+            return "rare"
+        elif any(word in text_upper for word in ["MAGIC", "MAGICAL"]) or (text_upper.count("+") > 2):
+            return "magic"
+        else:
+            return "normal"
+    
+    def _get_item_color(self) -> str:
+        """Get the display color for this item"""
+        if self.is_ethereal:
+            return ITEM_COLORS["ethereal"]
+        return ITEM_COLORS.get(self.item_quality, ITEM_COLORS["normal"])
+
+
+# -----------------------------
+# Cache management
+# -----------------------------
+def save_items_cache(items: List[Item], folder_path: str):
+    """Save items to cache file"""
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_data = {
+            'folder_path': folder_path,
+            'items': []
+        }
+        
+        # Convert items to serializable format
+        for item in items:
+            item_data = {
+                'text': item.text,
+                'source_file': item.source_file,
+                'category': item.category,
+                'color': item.color
+            }
+            cache_data['items'].append(item_data)
+        
+        with open(CACHE_FILE, 'wb') as f:
+            pickle.dump(cache_data, f)
+    except Exception as e:
+        print(f"Error saving cache: {e}")
+
+
+def load_items_cache() -> Tuple[List[Item], str]:
+    """Load items from cache file. Returns (items, folder_path)"""
+    try:
+        if not CACHE_FILE.exists():
+            return [], ""
+        
+        with open(CACHE_FILE, 'rb') as f:
+            cache_data = pickle.load(f)
+        
+        items = []
+        for item_data in cache_data.get('items', []):
+            item = Item(
+                item_data['text'], 
+                item_data['source_file'], 
+                item_data['category'],
+                item_data['color']
+            )
+            items.append(item)
+        
+        return items, cache_data.get('folder_path', "")
+    except Exception as e:
+        print(f"Error loading cache: {e}")
+        return [], ""
+
+
+def clear_items_cache():
+    """Delete cache files"""
+    try:
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+        if SETTINGS_CACHE_FILE.exists():
+            SETTINGS_CACHE_FILE.unlink()
+    except Exception as e:
+        print(f"Error clearing cache: {e}")
 
 
 # -----------------------------
@@ -465,15 +586,21 @@ class ItemListTab(ttk.Frame):
         super().__init__(parent)
         self.items: List[Item] = []
         self.filtered_items: List[Item] = []
+        self.scrollable_frame = None  # Initialize early to prevent AttributeError
         
         self.var_items_folder = tk.StringVar(value=DEFAULTS["ITEM_LIST_FOLDER"])
         self.var_search = tk.StringVar()
         self.var_category_filter = tk.StringVar(value="ALL")
         
+        # Build UI first, then set up traces to avoid AttributeError
+        self._build_ui()
+        
+        # Set up traces after UI is built
         self.var_search.trace("w", self._on_search_change)
         self.var_category_filter.trace("w", self._on_filter_change)
         
-        self._build_ui()
+        # Load cached items on startup
+        self._load_cached_items()
     
     def _build_ui(self):
         pad = {"padx": 8, "pady": 6}
@@ -558,12 +685,43 @@ class ItemListTab(ttk.Frame):
             folder_path = str(Path(folder).resolve())
             self.var_items_folder.set(folder_path)
     
+    def _load_cached_items(self):
+        """Load items from cache on startup"""
+        try:
+            cached_items, cached_folder = load_items_cache()
+            if cached_items:
+                self.items = cached_items
+                if cached_folder:
+                    self.var_items_folder.set(cached_folder)
+                self._apply_filters()
+                
+                # Count items by category
+                category_counts = {}
+                for item in self.items:
+                    category_counts[item.category] = category_counts.get(item.category, 0) + 1
+                
+                count_text = f"{len(self.items)} items loaded from cache"
+                if category_counts:
+                    sorted_cats = sorted(category_counts.items())
+                    details = ", ".join([f"{cat}: {count}" for cat, count in sorted_cats])
+                    count_text += f" ({details})"
+                
+                self.lbl_count.config(text=count_text)
+        except Exception as e:
+            print(f"Error loading cached items: {e}")
+    
     def _clear_items(self):
-        """Clear all loaded items and reset the display"""
+        """Clear all loaded items, reset the display, and delete cache"""
         self.items = []
         self.filtered_items = []
         self.lbl_count.config(text="No items loaded")
-        self._update_display()
+        
+        # Clear cache files
+        clear_items_cache()
+        
+        # Reset UI
+        if self.scrollable_frame:  # Check if scrollable_frame exists
+            self._update_display()
         
         # Reset search and filter
         self.var_search.set("")
@@ -578,6 +736,9 @@ class ItemListTab(ttk.Frame):
         try:
             self.items = load_items_from_folder(folder)
             self._apply_filters()
+            
+            # Save to cache
+            save_items_cache(self.items, folder)
             
             # Count items by category
             category_counts = {}
@@ -635,19 +796,23 @@ class ItemListTab(ttk.Frame):
         else:
             self.filtered_items = self.items[:]
         
-        self._update_display()
-        
-        # Scroll to top when filters change
-        self.canvas.yview_moveto(0)
+        # Only update display and scroll if UI is fully initialized
+        if hasattr(self, 'scrollable_frame') and self.scrollable_frame is not None:
+            self._update_display()
+            # Scroll to top when filters change
+            if hasattr(self, 'canvas'):
+                self.canvas.yview_moveto(0)
         
         # Update counter
         if query.strip() or category != "ALL":
             filter_text = f"{len(self.filtered_items)} / {len(self.items)} items"
             if category != "ALL":
                 filter_text += f" (Type: {category})"
-            self.lbl_count.config(text=filter_text)
+            if hasattr(self, 'lbl_count'):
+                self.lbl_count.config(text=filter_text)
         else:
-            self.lbl_count.config(text=f"{len(self.items)} items loaded")
+            if hasattr(self, 'lbl_count'):
+                self.lbl_count.config(text=f"{len(self.items)} items loaded")
     
     def _update_display(self):
         # Clear existing items
@@ -1023,6 +1188,21 @@ class App(tk.Tk):
         self.minsize(800, 600)
 
         self._build_ui()
+        
+        # Handle window close event to save cache
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    def _on_closing(self):
+        """Save cache before closing the application"""
+        try:
+            # Save current items to cache if any are loaded
+            if hasattr(self, 'item_list_tab') and self.item_list_tab.items:
+                folder_path = self.item_list_tab.var_items_folder.get()
+                save_items_cache(self.item_list_tab.items, folder_path)
+        except Exception as e:
+            print(f"Error saving cache on exit: {e}")
+        finally:
+            self.destroy()
 
     def _build_ui(self):
         # Create menu bar

@@ -35,7 +35,7 @@ jobs:
           Write-Host "ERROR: d2r_tooltip_vision_gui.py not found"
           exit 1
         }
-        if (Test-Path "icon.ico") {
+        if (Test-Path "images/icon.ico") {
           Write-Host "Icon file found"
         } else {
           Write-Host "WARNING: icon.ico not found, building without custom icon"
@@ -70,7 +70,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: D2R-AI-Item-Tracker-GUI-${{ runner.os }}
-        path: dist/D2R-AI-Item-Tracker-GUI.exe
+        path: dist/D2R AI Item Tracker.exe
         retention-days: 30
         
     - name: Upload to release (if release)
