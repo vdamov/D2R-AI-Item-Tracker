@@ -21,3 +21,4 @@ venv/
 
 # Exclude
 !requirements.txt
+!example/output/Akuma-javazon.txt
