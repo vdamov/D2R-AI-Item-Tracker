@@ -194,7 +194,7 @@ Items are automatically cached in `%LOCALAPPDATA%\D2R-AI-Item-Tracker\`. Use **C
 git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
 cd D2R-AI-Item-Tracker
 pip install -r requirements.txt
-pyinstaller --onefile --hidden-import=tkinter --name D2R-AI-Item-Tracker-GUI d2r_tooltip_vision_gui.py
+pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker.exe" d2r_tooltip_vision_gui.py
 ```
 
 ### GitHub Actions

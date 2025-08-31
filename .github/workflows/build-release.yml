@@ -28,12 +28,12 @@ jobs:
         # avoid spaces in exe name to keep paths simple
         run: |
           pyinstaller --onefile --hidden-import=tkinter --icon=images/icon.ico ^
-            --name D2R-AI-Item-Tracker-GUI d2r_tooltip_vision_gui.py
+            --name "D2R AI Item Tracker" d2r_tooltip_vision_gui.py
 
       - name: Verify build
         shell: powershell
         run: |
-          if (Test-Path "dist/D2R-AI-Item-Tracker-GUI.exe") {
+          if (Test-Path "dist/D2R AI Item Tracker.exe") {
             Write-Host "OK"
           } else {
             Write-Error "EXE not found"
@@ -43,8 +43,8 @@ jobs:
       - name: Upload artifact (for next job)
         uses: actions/upload-artifact@v4
         with:
-          name: D2R-AI-Item-Tracker-GUI
-          path: dist/D2R-AI-Item-Tracker-GUI.exe
+          name: "D2R AI Item Tracker"
+          path: dist/"D2R AI Item Tracker.exe"
           retention-days: 7
 
   release:
@@ -56,14 +56,14 @@ jobs:
       - name: Download built exe
         uses: actions/download-artifact@v4
         with:
-          name: D2R-AI-Item-Tracker-GUI
+          name: "D2R AI Item Tracker"
           path: .
 
       - name: Publish GitHub Release with EXE
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            D2R-AI-Item-Tracker-GUI.exe
+            "D2R AI Item Tracker.exe"
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           draft: false
