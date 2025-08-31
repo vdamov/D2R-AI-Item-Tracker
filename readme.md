@@ -1,13 +1,12 @@
 # D2R Tooltip OCR via Vision LLM (OpenAI-compatible)
 
 Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a **Vision LLM** served over an **OpenAI-compatible** API (e.g., **Groq**, OpenRouter, vLLM/LM Studio/Ollama OpenAI bridge).
-No Tesseract/EasyOCR needed—the script crops the tooltip with OpenCV, sends the crop to your vision model, and concatenates all outputs separated by `---`.
+No Tesseract/EasyOCR needed—the script sends the screenshot to your vision model, and concatenates all outputs separated by `---`.
 
 ---
 
 ## Features
 
-* 🔍 Auto-detects and crops the **tooltip panel** (OpenCV).
 * 🧠 Sends the crop to an **OpenAI-compatible** `/v1/chat/completions` endpoint.
 * 🧾 Returns the **raw tooltip text** (line breaks preserved).
 * 🧹 Optionally **removes footer UI lines** like:
@@ -34,7 +33,7 @@ No Tesseract/EasyOCR needed—the script crops the tooltip with OpenCV, sends th
 ```bash
 # 1) clone your repo
 git clone <your-fork-url>
-cd track-d2r-items   # or your repo folder
+cd D2R-AI-Item-Tracker   # or your repo folder
 
 # 2) create & activate venv (recommended)
 python -m venv venv
@@ -201,7 +200,16 @@ Socketed (3)
 
 ## License
 
-MIT (adjust as needed).
+MIT License
+
+Copyright (c) 2025 Vladimir Damov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
 ---
 
@@ -209,7 +217,7 @@ MIT (adjust as needed).
 
 ```bash
 git clone <repo>
-cd track-d2r-items
+cd D2R-AI-Item-Tracker
 python -m venv venv
 .\venv\Scripts\Activate.ps1   # or: source venv/bin/activate
 pip install -r requirements.txt
