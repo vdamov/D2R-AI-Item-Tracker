@@ -45,13 +45,13 @@ jobs:
     - name: Build executable with icon
       if: hashFiles('icon.ico') != ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name D2R-AI-Item-Tracker-GUI --icon=icon.ico d2r_tooltip_vision_gui.py
+        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=icon.ico d2r_tooltip_vision_gui.py
       shell: cmd
       
     - name: Build executable without icon
       if: hashFiles('icon.ico') == ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name D2R-AI-Item-Tracker-GUI d2r_tooltip_vision_gui.py
+        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" d2r_tooltip_vision_gui.py
       shell: cmd
       
     - name: Verify build
@@ -69,7 +69,7 @@ jobs:
     - name: Upload executable artifact
       uses: actions/upload-artifact@v4
       with:
-        name: D2R-AI-Item-Tracker-GUI-${{ runner.os }}
+        name: D2R AI Item Tracker-${{ runner.os }}
         path: dist/D2R AI Item Tracker.exe
         retention-days: 30
         
