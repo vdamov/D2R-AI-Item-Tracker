@@ -38,18 +38,18 @@ jobs:
         if (Test-Path "images/icon.ico") {
           Write-Host "Icon file found"
         } else {
-          Write-Host "WARNING: icon.ico not found, building without custom icon"
+          Write-Host "WARNING: images/icon.ico not found, building without custom icon"
         }
       shell: powershell
       
     - name: Build executable with icon
-      if: hashFiles('icon.ico') != ''
+      if: hashFiles('images/icon.ico') != ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=icon.ico d2r_tooltip_vision_gui.py
+        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=images/icon.ico d2r_tooltip_vision_gui.py
       shell: cmd
       
     - name: Build executable without icon
-      if: hashFiles('icon.ico') == ''
+      if: hashFiles('images/icon.ico') == ''
       run: |
         pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" d2r_tooltip_vision_gui.py
       shell: cmd
