@@ -35,11 +35,33 @@ No Tesseract/EasyOCR needed—the script sends each screenshot to your vision mo
 
 ---
 
+### Quick Start (TL;DR)
+
+```bash
+git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
+cd D2R-AI-Item-Tracker
+python -m venv venv
+.\venv\Scripts\Activate.ps1   # or: source venv/bin/activate
+pip install -r requirements.txt
+
+# .env (Groq example)
+echo VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions > .env
+echo VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct >> .env
+echo VISION_API_KEY=gsk_your_key_here >> .env
+echo MAX_WORKERS=1 >> .env
+echo RATE_LIMIT_RPM=30 >> .env
+echo RATE_JITTER_MS=200 >> .env
+
+python d2r_tooltip_vision_client.py "C:\Users\<you>\Documents\Diablo II Resurrected\Screenshots" output.txt
+```
+
+---
+
 ## Installation
 
 ```bash
 # 1) clone
-git clone <your-fork-url>
+git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
 cd D2R-AI-Item-Tracker
 
 # 2) virtual env (recommended)
@@ -166,9 +188,6 @@ JAVELIN CLASS - VERY FAST ATTACK SPEED
 ADDS 1-511 LIGHTNING DAMAGE
 -15% TO ENEMY LIGHTNING RESISTANCE
 +3 TO LIGHTNING BOLT (AMAZON ONLY)
-
-SHIFT + LEFT CLICK TO UNEQUIP
-CTRL + LEFT CLICK TO MOVE
 ---
 ENIGMA
 Scarab Husk
@@ -226,25 +245,3 @@ MIT License
 Copyright (c) 2025 Vladimir Damov
 
 (see `LICENSE` for full text)
-
----
-
-### Quick Start (TL;DR)
-
-```bash
-git clone <repo>
-cd D2R-AI-Item-Tracker
-python -m venv venv
-.\venv\Scripts\Activate.ps1   # or: source venv/bin/activate
-pip install -r requirements.txt
-
-# .env (Groq example)
-echo VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions > .env
-echo VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct >> .env
-echo VISION_API_KEY=gsk_your_key_here >> .env
-echo MAX_WORKERS=1 >> .env
-echo RATE_LIMIT_RPM=30 >> .env
-echo RATE_JITTER_MS=200 >> .env
-
-python d2r_tooltip_vision_client.py "C:\Users\<you>\Documents\Diablo II Resurrected\Screenshots" output.txt
-```
