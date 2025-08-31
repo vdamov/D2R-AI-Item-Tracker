@@ -28,10 +28,10 @@ No Tesseract/EasyOCR needed—the script sends each screenshot to your vision mo
 
 ## Prerequisites
 
-* **Python 3.9+** (3.10/3.11 OK)
-* **pip** (or uv/pipx)
+* [**Python 3.9+** (3.10/3.11 OK)](https://www.python.org/downloads/)
+* [**pip** (or uv/pipx)](https://pip.pypa.io/en/stable/installation/)
 * A **vision-capable** model exposed via an **OpenAI-compatible** API
-  (OpenAI “GPT-4o”, Groq vision models, OpenRouter, or a local OpenAI bridge).
+  ([OpenAI “GPT-4o”](https://platform.openai.com/docs/models), [Groq vision models](https://console.groq.com/docs/vision), [OpenRouter](https://openrouter.ai/models), or a local OpenAI bridge).
 
 ---
 
