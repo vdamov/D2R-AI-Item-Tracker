@@ -90,6 +90,15 @@ RATE_JITTER_MS=200     # small random delay to avoid bursts
 
 ### Groq example
 
+Groq provides **free access** to their hosted LLaMA vision models, but you’ll need to log in with a **Google account** (no other login methods supported at the moment).
+
+1. Go to [https://console.groq.com](https://console.groq.com)
+2. Sign in with your Google account
+3. Open the **API Keys** section in the left menu
+4. Click **Create Key** — you’ll get a key that looks like `gsk_...`
+
+Add that key to your `.env` file:
+
 ```env
 VISION_ENDPOINT=https://api.groq.com/openai/v1/chat/completions
 VISION_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
@@ -99,7 +108,7 @@ RATE_LIMIT_RPM=30
 RATE_JITTER_MS=200
 ```
 
-> Make sure the model you pick **accepts images** in the chat API.
+> **Note:** Groq’s free tier has limits (around 30 requests/minute). Keep `MAX_WORKERS=1` and leave rate limiting enabled in the script to avoid 429 errors.
 
 ---
 
