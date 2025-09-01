@@ -39,10 +39,10 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 
 1. **Get the EXE**
    - Open the repository's [**Releases**](https://github.com/vdamov/D2R-AI-Item-Tracker/releases) page on GitHub
-   - Download **`D2R AI Item Tracker.exe`** from the latest release (Assets section)
+   - Download **`D2R-AI-Item-Tracker.exe`** from the latest release (Assets section)
 
 2. **Run the App**
-   - Double-click `D2R AI Item Tracker.exe`
+   - Double-click `D2R-AI-Item-Tracker.exe`
    - In the **Item Tracker** tab, fill in:
      - **Endpoint** – OpenAI-compatible chat-completions URL  
        (e.g., `https://api.groq.com/openai/v1/chat/completions`)
@@ -194,7 +194,7 @@ Items are automatically cached in `%LOCALAPPDATA%\D2R-AI-Item-Tracker\`. Use **C
 git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
 cd D2R-AI-Item-Tracker
 pip install -r requirements.txt
-pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" main.py
+pyinstaller --onefile --hidden-import=tkinter --name "D2R-AI-Item-Tracker" --icon=images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" main.py
 ```
 
 ### GitHub Actions
