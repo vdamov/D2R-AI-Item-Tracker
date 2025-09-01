@@ -190,7 +190,7 @@ Items are automatically cached in `%LOCALAPPDATA%\D2R-AI-Item-Tracker\`. Use **C
 git clone https://github.com/vdamov/D2R-AI-Item-Tracker.git
 cd D2R-AI-Item-Tracker
 pip install -r requirements.txt
-pyinstaller --onefile --hidden-import=tkinter --name "D2R-AI-Item-Tracker" --icon=images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" main.py
+pyinstaller --onefile --hidden-import=tkinter --name "D2R-AI-Item-Tracker" --icon=assets/images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "assets/images/icon-color.ico;images" main.py
 ```
 
 ### GitHub Actions

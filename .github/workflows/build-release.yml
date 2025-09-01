@@ -27,7 +27,7 @@ jobs:
       - name: Build GUI exe (no spaces in name)
         shell: cmd
         run: |
-          pyinstaller --onefile --noupx --clean --hidden-import=tkinter --icon=images\icon.ico --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" --name D2R-AI-Item-Tracker main.py
+          pyinstaller --onefile --noupx --clean --hidden-import=tkinter --icon=assets/images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "assets/images/icon-color.ico;images" --name D2R-AI-Item-Tracker main.py
 
       - name: Verify build
         shell: powershell

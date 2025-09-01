@@ -37,23 +37,23 @@ jobs:
           Write-Host "ERROR: main.py not found"
           exit 1
         }
-        if (Test-Path "images/icon.ico") {
+        if (Test-Path "assets/images/icon.ico") {
           Write-Host "Icon file found"
         } else {
-          Write-Host "WARNING: images/icon.ico not found, building without custom icon"
+          Write-Host "WARNING: assets/images/icon.ico not found, building without custom icon"
         }
       shell: powershell
       
     - name: Build executable with icon
-      if: hashFiles('images/icon.ico') != ''
+      if: hashFiles('assets/images/icon.ico') != ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" main.py
+        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=assets/images/icon.ico --add-data "assets/fonts;assets/fonts" --add-data "assets/images/icon-color.ico;images" main.py
       shell: cmd
       
     - name: Build executable without icon
       if: hashFiles('images/icon.ico') == ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --add-data "assets/fonts;assets/fonts" --add-data "images/icon-color.ico;images" --name "D2R AI Item Tracker" main.py
+        pyinstaller --onefile --hidden-import=tkinter --add-data "assets/fonts;assets/fonts" --add-data "assets/images/icon-color.ico;images" --name "D2R AI Item Tracker" main.py
       shell: cmd
       
     - name: Verify build
