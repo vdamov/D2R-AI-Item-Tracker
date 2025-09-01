@@ -47,13 +47,13 @@ jobs:
     - name: Build executable with icon
       if: hashFiles('images/icon.ico') != ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=images/icon.ico d2r_tooltip_vision_gui.py
+        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" --icon=images/icon.ico --add-data "assets/fonts;fonts" --add-data "images/icon-color.ico;images" d2r_tooltip_vision_gui.py
       shell: cmd
       
     - name: Build executable without icon
       if: hashFiles('images/icon.ico') == ''
       run: |
-        pyinstaller --onefile --hidden-import=tkinter --name "D2R AI Item Tracker" d2r_tooltip_vision_gui.py
+        pyinstaller --onefile --hidden-import=tkinter --add-data "assets/fonts;fonts" --add-data "images/icon-color.ico;images" --name "D2R AI Item Tracker" d2r_tooltip_vision_gui.py
       shell: cmd
       
     - name: Verify build

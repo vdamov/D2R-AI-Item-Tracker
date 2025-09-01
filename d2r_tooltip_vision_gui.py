@@ -1,4 +1,5 @@
 import base64
+from ctypes import wintypes
 from io import BytesIO
 import os
 import sys
@@ -21,6 +22,7 @@ from dotenv import load_dotenv
 # ---------- GUI ----------
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import tkinter.font as tkfont
 
 APP_TITLE = "D2R AI Item Tracker (GUI)"
 DEFAULT_OUTPUT_NAME = "output.txt"
@@ -61,13 +63,10 @@ SYSTEM_PROMPT = (
     "If the item is part of a set, do NOT include the list of other set items "
     "that always appears at the very bottom (e.g., 'NAJ'S ANCIENT VESTIGE, TAL RASHA'S WRAPPINGS ...'). "
     "Only return the actual stats and description of the currently hovered item. "
-    "After the item text, add these lines: "
+    "After the item text, add this line: "
     "[CATEGORY: X] where X is one of: WEAPON, ARMOR, CHARM, RING, AMULET, JEWEL, GEM, RUNE, MISC "
-    "[COLOR: #XXXXXX] where XXXXXX is the hex color based on item quality: "
-    "White/Gray items: #c7b377, Magic/Blue items: #6969ff, Rare/Yellow items: #ffff64, "
-    "Unique/Gold items: #c79c1e, Set/Green items: #00ff00, "
-    "Crafted/Orange items: #ff8000, Runes/Gems: #c7b377, Ethereal overlay: #c0c0c0"
 )
+
 USER_PROMPT = "Extract the exact text content from this item tooltip. Only output the text, no explanations."
 
 BANNED_LINES = {
@@ -76,34 +75,21 @@ BANNED_LINES = {
     "SHIFT + LEFT CLICK TO EQUIP",
     "HOLD SHIFT TO COMPARE",
     "LEFT CLICK TO CAST",
-    "KEEP IN INVENTORY TO GAIN BONUS"
-}
-
-# Item quality colors (D2R style)
-ITEM_COLORS = {
-    "normal": "#c7b377",     # White/Gray
-    "magic": "#6969ff",      # Blue
-    "rare": "#ffff64",       # Yellow
-    "unique": "#c79c1e",     # Gold
-    "set": "#00ff00",        # Green
-    "crafted": "#ff8000",    # Orange
-    "ethereal": "#c0c0c0",   # Silver/gray overlay
-    "rune": "#c7b377",       # Gray
-    "gem": "#c7b377",        # Gray
+    "KEEP IN INVENTORY TO GAIN BONUS",
 }
 
 # Item categories
 ITEM_CATEGORIES = [
     "ALL",
-    "WEAPON", 
-    "ARMOR", 
-    "CHARM", 
+    "WEAPON",
+    "ARMOR",
+    "CHARM",
     "RING",
-    "AMULET", 
+    "AMULET",
     "JEWEL",
-    "GEM", 
+    "GEM",
     "RUNE",
-    "MISC"
+    "MISC",
 ]
 
 
@@ -123,35 +109,29 @@ def clean_output(text: str) -> Tuple[str, str, str]:
     """Clean output and extract category and color. Returns (cleaned_text, category, color)"""
     out = []
     category = "MISC"  # Default category
-    color = "#c7b377"  # Default color (normal/white)
-    
+
     for ln in text.splitlines():
         s = ln.strip()
         if not s:
             continue
         if s.upper() in BANNED_LINES:
             continue
-        
+
         # Check for category tag
         if s.startswith("[CATEGORY:") and s.endswith("]"):
-            category_match = re.search(r'\[CATEGORY:\s*(\w+)\]', s.upper())
+            category_match = re.search(r"\[CATEGORY:\s*(\w+)\]", s.upper())
             if category_match:
                 category = category_match.group(1)
             continue  # Don't include this line in output
-        
-        # Check for color tag
-        if s.startswith("[COLOR:") and s.endswith("]"):
-            color_match = re.search(r'\[COLOR:\s*(#[0-9A-Fa-f]{6})\]', s)
-            if color_match:
-                color = color_match.group(1)
-            continue  # Don't include this line in output
-            
+
         out.append(s)
-    
-    return "\n".join(out), category, color
+
+    return "\n".join(out), category
 
 
-def ensure_txt_path(path: str, default_dir: str, default_name: str = "output.txt") -> str:
+def ensure_txt_path(
+    path: str, default_dir: str, default_name: str = "output.txt"
+) -> str:
     """
     Return a normalized .txt file path.
     - If `path` is a folder or empty, append default_name.
@@ -236,7 +216,8 @@ def call_vision_api(
             r.raise_for_status()
             obj = r.json()
             text = obj["choices"][0]["message"]["content"]
-            return (text or "").strip()
+            usage = obj.get("usage", {})
+            return (text or "").strip(), usage
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
                 raise
@@ -244,60 +225,20 @@ def call_vision_api(
         except (KeyError, IndexError) as e:
             # surface raw response in GUI log helps debugging
             raise RuntimeError(f"Bad API response format: {e}")
-    return ""
+    return "", {}
 
 
 # -----------------------------
 # Item List logic
 # -----------------------------
 class Item:
-    def __init__(self, text: str, source_file: str, category: str = "MISC", color: str = None):
+    def __init__(self, text: str, source_file: str, category: str = "MISC"):
         self.text = text.strip()
         self.source_file = source_file
         self.hero_name = Path(source_file).stem
         self.category = category.upper()
         self.is_ethereal = "ETHEREAL" in self.text.upper()
-        
-        # These must be at the bottom since they use other properties
-        self.item_quality = self._detect_item_quality()
-        self.color = color if color else self._get_item_color()
-    
-    def _detect_item_quality(self) -> str:
-        """Detect item quality/rarity from text for color coding"""
-        text_upper = self.text.upper()
-        
-        # Runes are always gray
-        if self.category == "RUNE":
-            return "rune"
-        
-        # Gems are always gray  
-        if self.category == "GEM":
-            return "gem"
-        
-        # Check for ethereal first (affects color but not quality)
-        if "ETHEREAL" in text_upper:
-            # Ethereal items keep their base quality but get silver tint
-            pass
-            
-        # Check for specific quality indicators
-        if any(word in text_upper for word in ["UNIQUE", "LEGENDARY"]) or text_upper.startswith("UNIQUE"):
-            return "unique"
-        elif any(word in text_upper for word in ["SET ITEM", "SET:", "SET "]) or "SET" in text_upper:
-            return "set"
-        elif any(word in text_upper for word in ["CRAFTED", "CRAFT"]):
-            return "crafted"
-        elif "RARE" in text_upper or (self.category in ["WEAPON", "ARMOR"] and text_upper.count("\n") > 6):
-            return "rare"
-        elif any(word in text_upper for word in ["MAGIC", "MAGICAL"]) or (text_upper.count("+") > 2):
-            return "magic"
-        else:
-            return "normal"
-    
-    def _get_item_color(self) -> str:
-        """Get the display color for this item"""
-        if self.is_ethereal:
-            return ITEM_COLORS["ethereal"]
-        return ITEM_COLORS.get(self.item_quality, ITEM_COLORS["normal"])
+        self.is_socketed = "SOCKETED" in self.text.upper()
 
 
 # -----------------------------
@@ -307,22 +248,18 @@ def save_items_cache(items: List[Item], folder_path: str):
     """Save items to cache file"""
     try:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_data = {
-            'folder_path': folder_path,
-            'items': []
-        }
-        
+        cache_data = {"folder_path": folder_path, "items": []}
+
         # Convert items to serializable format
         for item in items:
             item_data = {
-                'text': item.text,
-                'source_file': item.source_file,
-                'category': item.category,
-                'color': item.color
+                "text": item.text,
+                "source_file": item.source_file,
+                "category": item.category,
             }
-            cache_data['items'].append(item_data)
-        
-        with open(CACHE_FILE, 'wb') as f:
+            cache_data["items"].append(item_data)
+
+        with open(CACHE_FILE, "wb") as f:
             pickle.dump(cache_data, f)
     except Exception as e:
         print(f"Error saving cache: {e}")
@@ -333,21 +270,20 @@ def load_items_cache() -> Tuple[List[Item], str]:
     try:
         if not CACHE_FILE.exists():
             return [], ""
-        
-        with open(CACHE_FILE, 'rb') as f:
+
+        with open(CACHE_FILE, "rb") as f:
             cache_data = pickle.load(f)
-        
+
         items = []
-        for item_data in cache_data.get('items', []):
+        for item_data in cache_data.get("items", []):
             item = Item(
-                item_data['text'], 
-                item_data['source_file'], 
-                item_data['category'],
-                item_data['color']
+                item_data["text"],
+                item_data["source_file"],
+                item_data["category"],
             )
             items.append(item)
-        
-        return items, cache_data.get('folder_path', "")
+
+        return items, cache_data.get("folder_path", "")
     except Exception as e:
         print(f"Error loading cache: {e}")
         return [], ""
@@ -364,136 +300,82 @@ def clear_items_cache():
         print(f"Error clearing cache: {e}")
 
 
-# -----------------------------
-# Item List logic
-# -----------------------------
-class Item:
-    def __init__(self, text: str, source_file: str, category: str = "MISC", color: str = None):
-        self.text = text.strip()
-        self.source_file = source_file
-        self.hero_name = Path(source_file).stem
-        self.category = category.upper()
-        self.is_ethereal = "ETHEREAL" in self.text.upper()
-        
-        # These must be at the bottom since they use other properties
-        self.item_quality = self._detect_item_quality()
-        self.color = color if color else self._get_item_color()
-    
-    def _detect_item_quality(self) -> str:
-        """Detect item quality/rarity from text for color coding"""
-        text_upper = self.text.upper()
-        
-        # Runes are always gray
-        if self.category == "RUNE":
-            return "rune"
-        
-        # Gems are always gray  
-        if self.category == "GEM":
-            return "gem"
-        
-        # Check for ethereal first (affects color but not quality)
-        if "ETHEREAL" in text_upper:
-            # Ethereal items keep their base quality but get silver tint
-            pass
-            
-        # Check for specific quality indicators
-        if any(word in text_upper for word in ["UNIQUE", "LEGENDARY"]) or text_upper.startswith("UNIQUE"):
-            return "unique"
-        elif any(word in text_upper for word in ["SET ITEM", "SET:", "SET "]) or "SET" in text_upper:
-            return "set"
-        elif any(word in text_upper for word in ["CRAFTED", "CRAFT"]):
-            return "crafted"
-        elif "RARE" in text_upper or (self.category in ["WEAPON", "ARMOR"] and text_upper.count("\n") > 6):
-            return "rare"
-        elif any(word in text_upper for word in ["MAGIC", "MAGICAL"]) or (text_upper.count("+") > 2):
-            return "magic"
-        else:
-            return "normal"
-    
-    def _get_item_color(self) -> str:
-        """Get the display color for this item"""
-        if self.is_ethereal:
-            return ITEM_COLORS["ethereal"]
-        return ITEM_COLORS.get(self.item_quality, ITEM_COLORS["normal"])
-
-
 def load_items_from_folder(folder_path: str) -> List[Item]:
     """Load all items from text files in a folder"""
     items = []
     folder = Path(folder_path)
-    
+
     if not folder.exists() or not folder.is_dir():
         return items
-    
+
     for txt_file in folder.glob("*.txt"):
         try:
             content = txt_file.read_text(encoding="utf-8")
             item_texts = content.split("---")
-            
+
             for item_text in item_texts:
                 item_text = item_text.strip()
                 if not item_text:
                     continue
-                
+
                 # Parse category and color if present (from new OCR output)
                 category = "MISC"
-                color = None
-                
-                category_match = re.search(r'\[CATEGORY:\s*(\w+)\]', item_text, re.IGNORECASE)
+
+                category_match = re.search(
+                    r"\[CATEGORY:\s*(\w+)\]", item_text, re.IGNORECASE
+                )
                 if category_match:
                     category = category_match.group(1).upper()
                     # Remove category line from display text
-                    item_text = re.sub(r'\[CATEGORY:\s*\w+\]', '', item_text, flags=re.IGNORECASE).strip()
-                
-                color_match = re.search(r'\[COLOR:\s*(#[0-9A-Fa-f]{6})\]', item_text, re.IGNORECASE)
-                if color_match:
-                    color = color_match.group(1)
-                    # Remove color line from display text
-                    item_text = re.sub(r'\[COLOR:\s*#[0-9A-Fa-f]{6}\]', '', item_text, flags=re.IGNORECASE).strip()
-                
+                    item_text = re.sub(
+                        r"\[CATEGORY:\s*\w+\]", "", item_text, flags=re.IGNORECASE
+                    ).strip()
+
                 if item_text:  # Only add if there's actual item text after cleaning
-                    items.append(Item(item_text, str(txt_file), category, color))
+                    items.append(Item(item_text, str(txt_file), category))
         except Exception as e:
             print(f"Error reading {txt_file}: {e}")
-    
+
     return items
 
 
-def fuzzy_search(items: List[Item], query: str, category_filter: str = "ALL") -> List[Item]:
+def fuzzy_search(
+    items: List[Item], query: str, category_filter: str = "ALL"
+) -> List[Item]:
     """Simple fuzzy search through items with category filtering"""
     # First filter by category
     if category_filter != "ALL":
         items = [item for item in items if item.category == category_filter]
-    
+
     if not query.strip():
         return items
-    
+
     query = query.lower()
     results = []
-    
+
     for item in items:
         text_lower = item.text.lower()
         hero_lower = item.hero_name.lower()
-        
+
         # Score based on multiple factors
         score = 0
-        
+
         # Exact matches get highest score
         if query in text_lower:
             score += 100
         if query in hero_lower:
             score += 50
-            
+
         # Partial word matches
         for word in query.split():
             if word in text_lower:
                 score += 20
             if word in hero_lower:
                 score += 10
-        
+
         if score > 0:
             results.append((score, item))
-    
+
     # Sort by score descending
     results.sort(key=lambda x: x[0], reverse=True)
     return [item for score, item in results]
@@ -547,7 +429,7 @@ class Processor(threading.Thread):
                     if img is None:
                         raise RuntimeError("Cannot read image")
 
-                    raw = call_vision_api(
+                    raw, usage = call_vision_api(
                         img,
                         self.p["VISION_ENDPOINT"],
                         self.p["VISION_MODEL"],
@@ -559,11 +441,20 @@ class Processor(threading.Thread):
                         jitter_s,
                         last_ts_holder,
                     )
-                    cleaned, category, color = clean_output(raw)
+                    cleaned, category = clean_output(raw)
                     # Include category and color in the output for the Item List tab to parse later
-                    full_output = f"{cleaned}\n[CATEGORY: {category}]\n[COLOR: {color}]" if cleaned else ""
+                    full_output = (
+                        f"{cleaned}\n[CATEGORY: {category}]" if cleaned else ""
+                    )
                     outputs.append(full_output)
-                    self.log(f"[ok] {base} ({len(cleaned)} chars, {category}, {color})")
+                    self.log(f"[ok] {base} ({len(cleaned)} chars, {category})")
+                    if usage:
+                        pt = usage.get("prompt_tokens", "?")
+                        ct = usage.get("completion_tokens", "?")
+                        tt = usage.get("total_tokens", "?")
+                        self.log(
+                            f"    ↳ tokens: prompt={pt}, completion={ct}, total={tt}"
+                        )
                 except Exception as e:
                     outputs.append("")  # Add empty string to maintain order
                     self.log(f"[err] {base} -> {e}")
@@ -588,28 +479,28 @@ class ItemListTab(ttk.Frame):
         self.items: List[Item] = []
         self.filtered_items: List[Item] = []
         self.scrollable_frame = None  # Initialize early to prevent AttributeError
-        
+
         self.var_items_folder = tk.StringVar(value=DEFAULTS["ITEM_LIST_FOLDER"])
         self.var_search = tk.StringVar()
         self.var_category_filter = tk.StringVar(value="ALL")
-        
+
         # Build UI first, then set up traces to avoid AttributeError
         self._build_ui()
-        
+
         # Set up traces after UI is built
         self.var_search.trace("w", self._on_search_change)
         self.var_category_filter.trace("w", self._on_filter_change)
-        
+
         # Load cached items on startup
         self._load_cached_items()
-    
+
     def _build_ui(self):
         pad = {"padx": 8, "pady": 6}
-        
+
         # Folder selection
         frm_folder = ttk.LabelFrame(self, text="Item List Settings")
         frm_folder.pack(fill="x", **pad)
-        
+
         ttk.Label(frm_folder, text="Items folder:").grid(row=0, column=0, sticky="e")
         ttk.Entry(frm_folder, textvariable=self.var_items_folder, width=50).grid(
             row=0, column=1, sticky="we"
@@ -623,69 +514,78 @@ class ItemListTab(ttk.Frame):
         ttk.Button(frm_folder, text="Clear List", command=self._clear_items).grid(
             row=0, column=4
         )
-        
+
         frm_folder.grid_columnconfigure(1, weight=1)
-        
+
         # Search and Filter
         frm_search = ttk.Frame(self)
         frm_search.pack(fill="x", **pad)
-        
+
         # Search section
         ttk.Label(frm_search, text="Search:").pack(side="left")
         search_entry = ttk.Entry(frm_search, textvariable=self.var_search, width=25)
         search_entry.pack(side="left", padx=(6, 20))
-        
-        # Filter section  
+
+        # Filter section
         ttk.Label(frm_search, text="Item Type:").pack(side="left")
-        type_combo = ttk.Combobox(frm_search, textvariable=self.var_category_filter, 
-                                 values=ITEM_CATEGORIES, state="readonly", width=12)
+        type_combo = ttk.Combobox(
+            frm_search,
+            textvariable=self.var_category_filter,
+            values=ITEM_CATEGORIES,
+            state="readonly",
+            width=12,
+        )
         type_combo.pack(side="left", padx=(6, 20))
         type_combo.set("ALL")  # Set default value
-        
+
         # Count section
         self.lbl_count = ttk.Label(frm_search, text="No items loaded")
         self.lbl_count.pack(side="right")
-        
+
         # Items display area with full background
         frm_items = ttk.LabelFrame(self, text="Items")
         frm_items.pack(fill="both", expand=True, **pad)
-        
+
         # Create scrollable frame with full coverage
         self.canvas = tk.Canvas(frm_items, bg="#1a1a1a", highlightthickness=0)
-        self.scrollbar = ttk.Scrollbar(frm_items, orient="vertical", command=self.canvas.yview)
+        self.scrollbar = ttk.Scrollbar(
+            frm_items, orient="vertical", command=self.canvas.yview
+        )
         self.scrollable_frame = tk.Frame(self.canvas, bg="#1a1a1a")
-        
+
         self.scrollable_frame.bind(
             "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
         )
-        
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.canvas_window = self.canvas.create_window(
+            (0, 0), window=self.scrollable_frame, anchor="nw"
+        )
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        
+
         # Bind canvas resize to update scrollable frame width
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        
+
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
-        
+
         # Bind mousewheel to canvas
         self.canvas.bind("<MouseWheel>", self._on_mousewheel)
         self.scrollable_frame.bind("<MouseWheel>", self._on_mousewheel)
-    
+
     def _on_canvas_configure(self, event):
         # Update scrollable frame width to match canvas
         self.canvas.itemconfig(self.canvas_window, width=event.width)
-    
+
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-    
+
     def _pick_items_folder(self):
         folder = filedialog.askdirectory(title="Select Items Folder (with .txt files)")
         if folder:
             folder_path = str(Path(folder).resolve())
             self.var_items_folder.set(folder_path)
-    
+
     def _load_cached_items(self):
         """Load items from cache on startup"""
         try:
@@ -695,64 +595,70 @@ class ItemListTab(ttk.Frame):
                 if cached_folder:
                     self.var_items_folder.set(cached_folder)
                 self._apply_filters()
-                
+
                 # Count items by category
                 category_counts = {}
                 for item in self.items:
-                    category_counts[item.category] = category_counts.get(item.category, 0) + 1
-                
+                    category_counts[item.category] = (
+                        category_counts.get(item.category, 0) + 1
+                    )
+
                 count_text = f"{len(self.items)} items loaded from cache"
                 if category_counts:
                     sorted_cats = sorted(category_counts.items())
-                    details = ", ".join([f"{cat}: {count}" for cat, count in sorted_cats])
+                    details = ", ".join(
+                        [f"{cat}: {count}" for cat, count in sorted_cats]
+                    )
                     count_text += f" ({details})"
-                
+
                 self.lbl_count.config(text=count_text)
         except Exception as e:
             print(f"Error loading cached items: {e}")
-    
+
     def _clear_items(self):
         """Clear all loaded items, reset the display, and delete cache"""
         self.items = []
         self.filtered_items = []
         self.lbl_count.config(text="No items loaded")
-        
+
         # Clear cache files
         clear_items_cache()
-        
+
         # Reset UI
         if self.scrollable_frame:  # Check if scrollable_frame exists
             self._update_display()
-        
+
         # Reset search and filter
         self.var_search.set("")
         self.var_category_filter.set("ALL")
-    
+
     def _load_items(self):
         folder = self.var_items_folder.get().strip()
         if not folder or not Path(folder).is_dir():
             messagebox.showerror(APP_TITLE, "Please select a valid folder.")
             return
-        
+
         try:
             self.items = load_items_from_folder(folder)
             self._apply_filters()
-            
+
             # Save to cache
             save_items_cache(self.items, folder)
-            
+
             # Count items by category
             category_counts = {}
             for item in self.items:
-                category_counts[item.category] = category_counts.get(item.category, 0) + 1
-            
+                category_counts[item.category] = (
+                    category_counts.get(item.category, 0) + 1
+                )
+
             count_text = f"{len(self.items)} items loaded"
             if category_counts:
                 # Sort categories for consistent display
                 sorted_cats = sorted(category_counts.items())
                 details = ", ".join([f"{cat}: {count}" for cat, count in sorted_cats])
                 count_text += f" ({details})"
-            
+
             self.lbl_count.config(text=count_text)
         except Exception as e:
             messagebox.showerror(APP_TITLE, f"Error loading items: {e}")
@@ -760,136 +666,170 @@ class ItemListTab(ttk.Frame):
         if not folder or not Path(folder).is_dir():
             messagebox.showerror(APP_TITLE, "Please select a valid folder.")
             return
-        
+
         try:
             self.items = load_items_from_folder(folder)
             self._apply_filters()
-            
+
             # Count items by category
             category_counts = {}
             for item in self.items:
-                category_counts[item.category] = category_counts.get(item.category, 0) + 1
-            
+                category_counts[item.category] = (
+                    category_counts.get(item.category, 0) + 1
+                )
+
             count_text = f"{len(self.items)} items loaded"
             if category_counts:
                 # Sort categories for consistent display
                 sorted_cats = sorted(category_counts.items())
                 details = ", ".join([f"{cat}: {count}" for cat, count in sorted_cats])
                 count_text += f" ({details})"
-            
+
             self.lbl_count.config(text=count_text)
         except Exception as e:
             messagebox.showerror(APP_TITLE, f"Error loading items: {e}")
-    
+
     def _on_search_change(self, *args):
         self._apply_filters()
-    
+
     def _on_filter_change(self, *args):
         self._apply_filters()
-    
+
     def _apply_filters(self):
         """Apply both search and category filters"""
         query = self.var_search.get()
         category = self.var_category_filter.get()
-        
+
         if query.strip() or category != "ALL":
             self.filtered_items = fuzzy_search(self.items, query, category)
         else:
             self.filtered_items = self.items[:]
-        
+
         # Only update display and scroll if UI is fully initialized
-        if hasattr(self, 'scrollable_frame') and self.scrollable_frame is not None:
+        if hasattr(self, "scrollable_frame") and self.scrollable_frame is not None:
             self._update_display()
             # Scroll to top when filters change
-            if hasattr(self, 'canvas'):
+            if hasattr(self, "canvas"):
                 self.canvas.yview_moveto(0)
-        
+
         # Update counter
         if query.strip() or category != "ALL":
             filter_text = f"{len(self.filtered_items)} / {len(self.items)} items"
             if category != "ALL":
                 filter_text += f" (Type: {category})"
-            if hasattr(self, 'lbl_count'):
+            if hasattr(self, "lbl_count"):
                 self.lbl_count.config(text=filter_text)
         else:
-            if hasattr(self, 'lbl_count'):
+            if hasattr(self, "lbl_count"):
                 self.lbl_count.config(text=f"{len(self.items)} items loaded")
-    
+
     def _update_display(self):
         # Clear existing items
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
-        
+
         if not self.filtered_items:
             if self.items:
                 msg_frame = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
                 msg_frame.pack(fill="both", expand=True)
-                ttk.Label(msg_frame, text="No items match your search/filter.", 
-                         font=("Segoe UI", 12), background="#1a1a1a", foreground="#cccccc").pack(pady=40)
+                ttk.Label(
+                    msg_frame,
+                    text="No items match your search/filter.",
+                    font=("Segoe UI", 12),
+                    background="#1a1a1a",
+                    foreground="#cccccc",
+                ).pack(pady=40)
             else:
                 msg_frame = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
                 msg_frame.pack(fill="both", expand=True)
-                ttk.Label(msg_frame, text="No items loaded. Click 'Load Items' to begin.", 
-                         font=("Segoe UI", 12), background="#1a1a1a", foreground="#cccccc").pack(pady=40)
+                ttk.Label(
+                    msg_frame,
+                    text="No items loaded. Click 'Load Items' to begin.",
+                    font=("Segoe UI", 12),
+                    background="#1a1a1a",
+                    foreground="#cccccc",
+                ).pack(pady=40)
             return
-        
+
         # Create main container frame
         container = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
         container.pack(fill="both", expand=True, padx=8, pady=8)
-        
+
         # Display items in a grid (3 per row)
         cols = 3
         for i, item in enumerate(self.filtered_items):
             row = i // cols
             col = i % cols
-            
+
             # Create item tile with fixed width
             tile = tk.Frame(container, relief="solid", bd=1, bg="#2a2a2a", width=280)
             tile.grid(row=row, column=col, padx=8, pady=8, sticky="new")
             tile.grid_propagate(False)  # Maintain fixed width
-            
+
             # Hero name header with category badge
-            hero_frame = tk.Frame(tile, bg="#1e1e1e", height=30)
+            hero_frame = tk.Frame(tile, bg="#2a2a2a", height=30)
             hero_frame.pack(fill="x")
             hero_frame.pack_propagate(False)
-            
+
             hero_text = f"📁 {item.hero_name}"
             if item.category != "MISC":
                 hero_text += f" [{item.category}]"
-            
-            hero_lbl = tk.Label(hero_frame, text=hero_text, 
-                               fg="#ffd700", bg="#1e1e1e", font=("Segoe UI", 9, "bold"))
+
+            hero_lbl = tk.Label(
+                hero_frame,
+                text=hero_text,
+                fg="#ffffff",
+                bg="#2a2a2a",
+                font=("Exocet", 11, "bold"),
+            )
             hero_lbl.pack(pady=4)
-            
+
             # Item text with color coding and auto height
-            item_text = tk.Text(tile, wrap="word", bg="#2a2a2a", fg=item.color, 
-                               font=("Consolas", 9), relief="flat", borderwidth=0,
-                               state="disabled", cursor="arrow")
-            
+            item_text = tk.Text(
+                tile,
+                wrap="word",
+                bg="#121212",
+                fg="#5959C7",
+                font=("Exocet", 11),
+                relief="flat",
+                borderwidth=0,
+                state="disabled",
+                cursor="arrow",
+            )
+
+            item_text.tag_configure(
+                "linegap",
+                spacing1=2,  # extra pixels above the first             display line of a paragraph
+                spacing2=4,  # extra pixels between wrapped             display lines
+                spacing3=2,  # extra pixels below the last             display line of a paragraph
+            )
+
             # Calculate required height for the text
-            lines = item.text.count('\n') + 1
-            lines += len(item.text) // 35  # Account for word wrapping (35 chars per line approx)
+            lines = item.text.count("\n") + 1
+            lines += (
+                len(item.text) // 35
+            )  # Account for word wrapping (35 chars per line approx)
             height = max(6, min(25, lines + 1))  # Min 6, max 25 lines
             item_text.config(height=height)
-            
+
             item_text.pack(padx=6, pady=(0, 6), fill="both", expand=True)
             item_text.config(state="normal")
             item_text.insert("1.0", item.text)
             item_text.config(state="disabled")
-        
+
         # Configure grid weights for 3 equal columns
         for col in range(cols):
             container.grid_columnconfigure(col, weight=1, uniform="col")
 
 
 # -----------------------------
-# Item Tracker Tab  
+# Item Tracker Tab
 # -----------------------------
 class ItemTrackerTab(ttk.Frame):
     def __init__(self, parent, app_ref):
         super().__init__(parent)
         self.app_ref = app_ref  # Reference to main app for .env functions
-        
+
         self.stop_flag = {"stop": False}
         self.worker: Processor = None
         self.log_q: queue.Queue[str] = queue.Queue()
@@ -931,7 +871,11 @@ class ItemTrackerTab(ttk.Frame):
         )
         self._key_entry.grid(row=2, column=1, sticky="we")
         ttk.Checkbutton(
-            frm_top, text="Show", variable=self._show_key, command=self._toggle_key
+            frm_top,
+            text="Show",
+            variable=self._show_key,
+            command=self._toggle_key,
+            style="Dark.TCheckbutton",
         ).grid(row=2, column=2)
 
         frm_top.grid_columnconfigure(1, weight=1)
@@ -995,7 +939,7 @@ class ItemTrackerTab(ttk.Frame):
             frm_actions, text="Stop", command=self._stop, state="disabled"
         )
         self.btn_stop.pack(side="left", padx=6)
-        
+
         # Add .env buttons back to tracker tab
         ttk.Button(frm_actions, text="Load .env", command=self.app_ref._load_env).pack(
             side="right", padx=(0, 6)
@@ -1031,8 +975,10 @@ class ItemTrackerTab(ttk.Frame):
 
     def _pick_output(self):
         current_folder = self.var_folder.get() or str(Path.cwd())
-        initial = self.var_output.get() or str(Path(current_folder) / DEFAULT_OUTPUT_NAME)
-        
+        initial = self.var_output.get() or str(
+            Path(current_folder) / DEFAULT_OUTPUT_NAME
+        )
+
         path = filedialog.asksaveasfilename(
             title="Save output as",
             defaultextension=".txt",
@@ -1054,66 +1000,81 @@ class ItemTrackerTab(ttk.Frame):
         if not self.var_api_key.get().strip():
             messagebox.showerror(APP_TITLE, "API key is required.")
             return False
-        
+
         folder = self.var_folder.get().strip()
         if not folder or not Path(folder).is_dir():
             messagebox.showerror(APP_TITLE, "Valid screenshots folder is required.")
             return False
-        
+
         if not self.var_output.get().strip():
             output_path = str(Path(folder) / DEFAULT_OUTPUT_NAME)
             self.var_output.set(output_path)
 
         # Normalize/repair the output path (handle "folder as file" cases)
-        fixed = ensure_txt_path(self.var_output.get().strip(), folder, DEFAULT_OUTPUT_NAME)
+        fixed = ensure_txt_path(
+            self.var_output.get().strip(), folder, DEFAULT_OUTPUT_NAME
+        )
         self.var_output.set(str(Path(fixed).resolve()))
 
         return True
 
     def _progress_update(self, done: int, total: int):
         """Thread-safe progress update"""
+
         def update():
             pct = int(done * 100 / max(1, total))
             self.prog["value"] = pct
+
         self.after(0, update)
 
     def _processing_done(self, content: str):
         """Thread-safe completion handler"""
+
         def finish():
             try:
                 if content:  # Only save if we have content
-                    out_path = ensure_txt_path(self.p["output"], self.p["folder"], DEFAULT_OUTPUT_NAME)
+                    out_path = ensure_txt_path(
+                        self.p["output"], self.p["folder"], DEFAULT_OUTPUT_NAME
+                    )
                     saved_to = save_text_atomic(out_path, content)
                     self.log_q.put(f"\n✅ Saved to: {saved_to}")
                 else:
                     self.log_q.put("\n❌ No content to save.")
             except PermissionError as e:
                 # Fallback to a safe, user-writable dir if Defender blocks Documents
-                fallback = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "D2R-AI-Item-Tracker" / DEFAULT_OUTPUT_NAME
+                fallback = (
+                    Path(os.getenv("LOCALAPPDATA", str(Path.home())))
+                    / "D2R-AI-Item-Tracker"
+                    / DEFAULT_OUTPUT_NAME
+                )
                 try:
                     fallback.parent.mkdir(parents=True, exist_ok=True)
                     saved_to = save_text_atomic(str(fallback), content)
-                    self.log_q.put(f"\n⚠️ Write blocked in selected folder. Saved to: {saved_to}")
+                    self.log_q.put(
+                        f"\n⚠️ Write blocked in selected folder. Saved to: {saved_to}"
+                    )
                 except Exception as e2:
-                    self.log_q.put(f"[fatal] Could not save output (blocked): {e}; fallback failed: {e2}")
+                    self.log_q.put(
+                        f"[fatal] Could not save output (blocked): {e}; fallback failed: {e2}"
+                    )
             except Exception as e:
                 self.log_q.put(f"[fatal] Could not save output: {e}")
             finally:
                 self.btn_run.config(state="normal")
                 self.btn_stop.config(state="disabled")
                 self.worker = None
-        
+
         self.after(0, finish)
 
     def _run(self):
         if not self._validate():
             return
-        
+
         # Stop any existing worker
         if self.worker and self.worker.is_alive():
             self.stop_flag["stop"] = True
             self.worker.join(timeout=2.0)
-        
+
         self.stop_flag["stop"] = False
         self.btn_run.config(state="disabled")
         self.btn_stop.config(state="normal")
@@ -1136,11 +1097,11 @@ class ItemTrackerTab(ttk.Frame):
 
         # Start the worker thread
         self.worker = Processor(
-            self.p, 
-            self.log_q, 
-            self._progress_update, 
-            self._processing_done, 
-            self.stop_flag
+            self.p,
+            self.log_q,
+            self._progress_update,
+            self._processing_done,
+            self.stop_flag,
         )
         self.worker.start()
 
@@ -1149,7 +1110,7 @@ class ItemTrackerTab(ttk.Frame):
             self.stop_flag["stop"] = True
             self.txt.insert("end", "Stopping...\n")
             self.txt.see("end")
-            
+
             # Wait for worker to finish
             def check_worker():
                 if self.worker and self.worker.is_alive():
@@ -1159,7 +1120,7 @@ class ItemTrackerTab(ttk.Frame):
                     self.btn_stop.config(state="disabled")
                     self.log_q.put("✅ Stopped successfully.")
                     self.worker = None
-            
+
             self.after(100, check_worker)
         else:
             # Worker is already stopped or None
@@ -1178,18 +1139,122 @@ class ItemTrackerTab(ttk.Frame):
         self.after(100, self._poll_logs)
 
 
+def apply_dark_theme(root):
+    DARK_BG = "#1e1e1e"
+    PANEL_BG = "#242424"  # section panels / labelframes
+    RAISED_BG = "#2a2a2a"  # fields
+    TEXT_FG = "#ffffff"
+    MUTED_FG = "#c7c7c7"
+    ACCENT_BG = "#333333"
+    HILIGHT = "#3a3a3a"
+
+    root.configure(bg=DARK_BG)
+    # Defaults for classic tk widgets
+    root.option_add("*Background", DARK_BG)
+    root.option_add("*Foreground", TEXT_FG)
+    root.option_add("*insertBackground", TEXT_FG)
+    root.option_add("*selectBackground", DARK_BG)
+    root.option_add("*selectForeground", TEXT_FG)
+    root.option_add("*highlightThickness", 0)
+
+    style = ttk.Style()
+    # 'clam' is most re-colorable across platforms
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        style.theme_use(style.theme_use())
+
+    # Notebook
+    style.configure("TNotebook", background=DARK_BG, borderwidth=0)
+    style.configure(
+        "TNotebook.Tab", background=ACCENT_BG, foreground=TEXT_FG, padding=(10, 6)
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", HILIGHT)],
+        foreground=[("disabled", MUTED_FG)],
+    )
+
+    # Frames / LabelFrames
+    style.configure("TFrame", background=DARK_BG)
+    style.configure("TLabelframe", background=PANEL_BG, bordercolor=HILIGHT)
+    style.configure("TLabelframe.Label", background=PANEL_BG, foreground=TEXT_FG)
+
+    # Labels / Buttons
+    style.configure("TLabel", background=DARK_BG, foreground=TEXT_FG)
+    style.configure("TButton", background=ACCENT_BG, foreground=TEXT_FG, borderwidth=1)
+    style.map(
+        "TButton",
+        background=[("active", HILIGHT), ("disabled", "#555555")],
+        foreground=[("disabled", "#9a9a9a")],
+    )
+
+    # Entry / Combobox
+    style.configure(
+        "TEntry", fieldbackground=RAISED_BG, foreground=TEXT_FG, bordercolor=HILIGHT
+    )
+    style.map(
+        "TEntry",
+        fieldbackground=[("disabled", "#1b1b1b")],
+        foreground=[("disabled", "#888888")],
+    )
+    style.configure(
+        "Dark.TCheckbutton",
+        background="#1e1e1e",
+        foreground="#ffffff",
+    )
+    style.map(
+        "Dark.TCheckbutton",
+        background=[("active", "#2a2a2a")],
+        foreground=[("disabled", "#9a9a9a")],
+    )
+
+    style.configure(
+        "TCombobox",
+        fieldbackground=RAISED_BG,
+        background=RAISED_BG,
+        foreground=TEXT_FG,
+        bordercolor=HILIGHT,
+    )
+    # Make the dropdown list dark (clam supports this)
+    style.configure("ComboboxPopdownFrame", background=RAISED_BG)
+    style.configure(
+        "Treeview",
+        background=RAISED_BG,
+        foreground=TEXT_FG,
+        fieldbackground=RAISED_BG,
+        bordercolor=HILIGHT,
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", "#444444")],
+        foreground=[("disabled", MUTED_FG)],
+    )
+
+    # Scrollbars / Progressbar
+    style.configure("TScrollbar", background=ACCENT_BG, troughcolor=DARK_BG)
+    style.configure("TProgressbar", background="#6a6a6a", troughcolor=DARK_BG)
+
+    # For tk.Text widgets you create (log, item text), set manually:
+    # text_widget.config(bg="#0e0e0e", fg=TEXT_FG, insertbackground=TEXT_FG)
+
+
+
 # -----------------------------
 # Main App
 # -----------------------------
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.iconbitmap(asset_path("images/icon-color.ico"))
         self.title(APP_TITLE)
         self.geometry("900x700")
         self.minsize(800, 600)
+        
+        apply_dark_theme(self)
 
         self._build_ui()
-        
+
         # Handle window close event to save cache
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -1197,7 +1262,7 @@ class App(tk.Tk):
         """Save cache before closing the application"""
         try:
             # Save current items to cache if any are loaded
-            if hasattr(self, 'item_list_tab') and self.item_list_tab.items:
+            if hasattr(self, "item_list_tab") and self.item_list_tab.items:
                 folder_path = self.item_list_tab.var_items_folder.get()
                 save_items_cache(self.item_list_tab.items, folder_path)
         except Exception as e:
@@ -1209,24 +1274,17 @@ class App(tk.Tk):
         # Create menu bar
         menubar = tk.Menu(self)
         self.config(menu=menubar)
-        
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Load .env", command=self._load_env)
-        file_menu.add_command(label="Save .env", command=self._save_env)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.quit)
 
         # Create notebook (tabs)
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=8, pady=8)
-        
+
         # Create tabs
         self.tracker_tab = ItemTrackerTab(self.notebook, self)
         self.item_list_tab = ItemListTab(self.notebook)
-        
+
         self.notebook.add(self.tracker_tab, text="Item Tracker")
-        self.notebook.add(self.item_list_tab, text="Item List")
+        self.notebook.add(self.item_list_tab, text="Item Catalog")
 
     def _load_env(self):
         # Let user choose .env file to load
@@ -1234,12 +1292,12 @@ class App(tk.Tk):
             title="Load .env file",
             defaultextension=".env",
             filetypes=[("Environment files", "*.env"), ("All files", "*.*")],
-            initialdir=os.getcwd()
+            initialdir=os.getcwd(),
         )
-        
+
         if not path:
             return
-            
+
         try:
             # Read the .env file manually to avoid reloading the global env
             env_vars = {}
@@ -1249,7 +1307,7 @@ class App(tk.Tk):
                     if line and not line.startswith("#") and "=" in line:
                         key, value = line.split("=", 1)
                         env_vars[key.strip()] = value.strip()
-            
+
             # Update the tracker tab variables
             if "VISION_ENDPOINT" in env_vars:
                 self.tracker_tab.var_endpoint.set(env_vars["VISION_ENDPOINT"])
@@ -1271,11 +1329,11 @@ class App(tk.Tk):
                 self.tracker_tab.var_rpm.set(env_vars["RATE_LIMIT_RPM"])
             if "RATE_JITTER_MS" in env_vars:
                 self.tracker_tab.var_jitter.set(env_vars["RATE_JITTER_MS"])
-            
+
             # Update the item list tab variables
             if "ITEM_LIST_FOLDER" in env_vars:
                 self.item_list_tab.var_items_folder.set(env_vars["ITEM_LIST_FOLDER"])
-                
+
             messagebox.showinfo(APP_TITLE, f"Loaded settings from:\n{path}")
         except Exception as e:
             messagebox.showerror(APP_TITLE, f"Failed to load .env file: {e}")
@@ -1287,12 +1345,12 @@ class App(tk.Tk):
             defaultextension=".env",
             filetypes=[("Environment files", "*.env"), ("All files", "*.*")],
             initialfile=".env",
-            initialdir=os.getcwd()
+            initialdir=os.getcwd(),
         )
-        
+
         if not path:
             return
-            
+
         lines = [
             f"VISION_ENDPOINT={self.tracker_tab.var_endpoint.get().strip()}",
             f"VISION_MODEL={self.tracker_tab.var_model.get().strip()}",
@@ -1316,12 +1374,59 @@ class App(tk.Tk):
             messagebox.showerror(APP_TITLE, f"Failed to save .env: {e}")
 
 
+def asset_path(rel):
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, rel)
+    return os.path.join(os.path.dirname(__file__), rel)
+
+
+def load_fonts():
+    # Only register on Windows; other OSes will just use system-installed fonts
+    import platform
+
+    if platform.system() != "Windows":
+        return False
+
+    FR_PRIVATE = 0x10
+    fonts_added = False
+    font_dir = asset_path("assets/fonts")
+
+    for fname in ("ExocetLight.ttf", "ExocetHeavy.ttf"):
+        fpath = os.path.join(font_dir, fname)
+        if os.path.exists(fpath):
+            try:
+                # Add the font privately for this process
+                if ctypes.windll.gdi32.AddFontResourceExW(fpath, FR_PRIVATE, 0) > 0:
+                    fonts_added = True
+            except Exception as e:
+                print(f"Couldn't add font {fname}: {e}")
+
+    if fonts_added:
+        # Tell apps the font list changed
+        HWND_BROADCAST = 0xFFFF
+        WM_FONTCHANGE = 0x001D
+        ctypes.windll.user32.SendMessageTimeoutW(
+            HWND_BROADCAST, WM_FONTCHANGE, 0, 0, 0, 1000, None
+        )
+
+    return fonts_added
+
+
 if __name__ == "__main__":
-    # Avoid DPI scaling blur on Windows (optional)
+    import ctypes
+
     try:
-        from ctypes import windll
-        windll.shcore.SetProcessDpiAwareness(1)
-    except Exception:
-        pass
+        # Optional: improve DPI rendering on Windows
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Per-monitor v1
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()  # Legacy fallback
+            except Exception:
+                pass
+
+        load_fonts()
+    except Exception as e:
+        print(f"Could not load custom fonts: {e}")
 
     App().mainloop()
