@@ -10,7 +10,6 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 - **Smart OCR**: Uses AI vision models to accurately read item tooltips
 - **Clean Output**: Removes UI elements like "Ctrl + Left Click to Move" and set item lists
 - **Item Categorization**: Automatically categorizes items (WEAPON, ARMOR, RING, etc.)
-- **Color Coding**: Preserves D2R item quality colors (unique gold, rare yellow, etc.)
 - **Searchable Database**: Browse and filter your entire item collection
 - **Persistent Cache**: Your item lists are saved between app sessions
 
@@ -29,7 +28,6 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 1. **Load Items**: Import your processed item text files
 2. **Smart Search**: Find items by name, stats, or character name
 3. **Category Filter**: Filter by item type (weapons, armor, charms, etc.)
-4. **Visual Browser**: View items in color-coded tiles with proper D2R styling
 
 **See the [`examples/` folder](https://github.com/vdamov/D2R-AI-Item-Tracker/tree/main/example)** for sample screenshots and their expected output format.
 
@@ -134,14 +132,12 @@ REQUIRED LEVEL: 72
 HALF FREEZE DURATION
 LEVEL 1 POISON NOVA (22/22 CHARGES)
 [CATEGORY: ARMOR]
-[COLOR: #c79c1e]
 ---
 RUBY GRAND CHARM OF LIFE
 REQUIRED LEVEL: 22
 +11 TO LIFE
 FIRE RESIST +2%
 [CATEGORY: CHARM]
-[COLOR: #6969ff]
 ```
 
 ---
