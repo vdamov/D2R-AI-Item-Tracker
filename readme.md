@@ -1,6 +1,6 @@
 # D2R AI Item Tracker (GUI)
 
-![D2R AI Item Tracker](images/cover.png "Item Tracker")
+![D2R AI Item Tracker](assets/images/cover.png "Item Tracker")
 
 Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a **Vision LLM** via an **OpenAI-compatible API** (e.g., Groq, OpenAI, OpenRouter, LM Studio/Ollama OpenAI bridge).
 
