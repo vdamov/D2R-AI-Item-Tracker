@@ -81,7 +81,19 @@ def apply_dark_theme(root):
         background=RAISED_BG,
         foreground=TEXT_FG,
         bordercolor=HILIGHT,
+        selectbackground=ACCENT_BG,
+        selectforeground=TEXT_FG,
+        arrowcolor=TEXT_FG
     )
+    
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", RAISED_BG), ("disabled", "#1b1b1b")],
+        foreground=[("readonly", TEXT_FG), ("disabled", "#888888")],
+        selectbackground=[("readonly", ACCENT_BG)],
+        selectforeground=[("readonly", TEXT_FG)]
+    )
+    
     # Make the dropdown list dark (clam supports this)
     style.configure("ComboboxPopdownFrame", background=RAISED_BG)
     style.configure(

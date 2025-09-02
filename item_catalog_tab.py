@@ -7,12 +7,18 @@ from typing import List
 
 from config import APP_TITLE, DEFAULTS, ITEM_CATEGORIES
 from models import Item, fuzzy_search
-from cache import save_items_cache, load_items_cache, clear_items_cache, load_items_from_folder
+from cache import (
+    save_items_cache,
+    load_items_cache,
+    clear_items_cache,
+    load_items_from_folder,
+    remove_item_from_file,
+)
 
 
 class ItemCatalogTab(ttk.Frame):
     """GUI tab for displaying and searching item lists."""
-    
+
     def __init__(self, parent):
         super().__init__(parent)
         self.items: List[Item] = []
@@ -119,7 +125,10 @@ class ItemCatalogTab(ttk.Frame):
 
     def _on_mousewheel(self, event):
         """Handle mouse wheel scrolling."""
-        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        # Check if the canvas has focus or if we're scrolling over it
+        if self.canvas.winfo_exists():
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"  # Prevent event from propagating
 
     def _pick_items_folder(self):
         """Open folder selection dialog."""
@@ -242,6 +251,146 @@ class ItemCatalogTab(ttk.Frame):
             if hasattr(self, "lbl_count"):
                 self.lbl_count.config(text=f"{len(self.items)} items loaded")
 
+    def _delete_item(self, item: Item):
+        """Delete an item from the catalog with confirmation."""
+        # Create custom dialog
+        dialog = tk.Toplevel(self)
+        dialog.title("Delete Item")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#1e1e1e")
+
+        # Hide the dialog initially to prevent flashing
+        dialog.withdraw()
+
+        # Get screen dimensions
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+
+        # Set dialog dimensions
+        dialog_width = 400
+        dialog_height = 200
+
+        # Calculate center position
+        x = (screen_width - dialog_width) // 2
+        y = (screen_height - dialog_height) // 2
+
+        # Set geometry with position
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+
+        dialog.transient(self)
+        dialog.grab_set()
+
+        # Get item name (first line of item text)
+        item_name = item.text.split("\n")[0] if item.text else "this item"
+
+        # Message
+        msg_frame = tk.Frame(dialog, bg="#1e1e1e")
+        msg_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        tk.Label(
+            msg_frame,
+            text=f"Are you sure you want to delete:\n\n{item_name}\n\nfrom the catalog?",
+            bg="#1e1e1e",
+            fg="#ffffff",
+            font=("Segoe UI", 10),
+            wraplength=350,
+        ).pack(pady=(0, 15))
+
+        # Checkbox for file deletion
+        var_delete_from_file = tk.BooleanVar(value=False)
+        checkbox = tk.Checkbutton(
+            msg_frame,
+            text="Also delete from source file (permanent)",
+            variable=var_delete_from_file,
+            bg="#1e1e1e",
+            fg="#ffffff",
+            selectcolor="#1e1e1e",
+            activebackground="#1e1e1e",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9),
+        )
+        checkbox.pack()
+
+        # Buttons
+        btn_frame = tk.Frame(dialog, bg="#1e1e1e")
+        btn_frame.pack(fill="x", padx=20, pady=(0, 20))
+
+        def confirm_delete():
+            try:
+                # Remove from file if requested
+                if var_delete_from_file.get():
+                    success = remove_item_from_file(item)
+                    if not success:
+                        messagebox.showwarning(
+                            APP_TITLE,
+                            "Could not remove item from file. It may have been already modified.",
+                        )
+
+                # Remove from current items list
+                if item in self.items:
+                    self.items.remove(item)
+
+                # Update cache
+                folder_path = self.var_items_folder.get()
+                save_items_cache(self.items, folder_path)
+
+                # Refresh display
+                self._apply_filters()
+
+                # Update count
+                self._update_count()
+
+                dialog.destroy()
+
+            except Exception as e:
+                messagebox.showerror(APP_TITLE, f"Error deleting item: {e}")
+                dialog.destroy()
+
+        tk.Button(
+            btn_frame,
+            text="Delete",
+            command=confirm_delete,
+            bg="#d32f2f",
+            fg="#ffffff",
+            width=10,
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="left", padx=(0, 10))
+
+        tk.Button(
+            btn_frame,
+            text="Cancel",
+            command=dialog.destroy,
+            bg="#333333",
+            fg="#ffffff",
+            width=10,
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="left")
+
+        # Focus on cancel button by default for safety
+        btn_frame.winfo_children()[1].focus_set()
+
+        # Show the dialog now that it's fully constructed and positioned
+        dialog.deiconify()
+
+    def _update_count(self):
+        """Update the item count display."""
+        category_counts = {}
+        for item in self.items:
+            category_counts[item.category] = category_counts.get(item.category, 0) + 1
+
+        if self.items:
+            count_text = f"{len(self.items)} items"
+            if category_counts:
+                sorted_cats = sorted(category_counts.items())
+                details = ", ".join([f"{cat}: {count}" for cat, count in sorted_cats])
+                count_text += f" ({details})"
+        else:
+            count_text = "No items loaded"
+
+        self.lbl_count.config(text=count_text)
+
     def _update_display(self):
         """Update the display with current filtered items."""
         # Clear existing items
@@ -252,28 +401,37 @@ class ItemCatalogTab(ttk.Frame):
             if self.items:
                 msg_frame = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
                 msg_frame.pack(fill="both", expand=True)
-                ttk.Label(
+                msg_frame.bind("<MouseWheel>", self._on_mousewheel)
+                msg_label = ttk.Label(
                     msg_frame,
                     text="No items match your search/filter.",
                     font=("Segoe UI", 12),
                     background="#1a1a1a",
                     foreground="#cccccc",
-                ).pack(pady=40)
+                )
+                msg_label.pack(pady=40)
+                msg_label.bind("<MouseWheel>", self._on_mousewheel)
             else:
                 msg_frame = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
                 msg_frame.pack(fill="both", expand=True)
-                ttk.Label(
+                msg_frame.bind("<MouseWheel>", self._on_mousewheel)
+                msg_label = ttk.Label(
                     msg_frame,
                     text="No items loaded. Click 'Load Items' to begin.",
                     font=("Segoe UI", 12),
                     background="#1a1a1a",
                     foreground="#cccccc",
-                ).pack(pady=40)
+                )
+                msg_label.pack(pady=40)
+                msg_label.bind("<MouseWheel>", self._on_mousewheel)
             return
 
         # Create main container frame
         container = tk.Frame(self.scrollable_frame, bg="#1a1a1a")
         container.pack(fill="both", expand=True, padx=8, pady=8)
+
+        # Bind mousewheel to container
+        container.bind("<MouseWheel>", self._on_mousewheel)
 
         # Display items in a grid (3 per row)
         cols = 3
@@ -286,23 +444,51 @@ class ItemCatalogTab(ttk.Frame):
             tile.grid(row=row, column=col, padx=8, pady=8, sticky="new")
             tile.grid_propagate(False)  # Maintain fixed width
 
-            # Hero name header with category badge
+            # Bind mousewheel to tile
+            tile.bind("<MouseWheel>", self._on_mousewheel)
+
+            # Hero name header with category badge and delete button
             hero_frame = tk.Frame(tile, bg="#2a2a2a", height=30)
             hero_frame.pack(fill="x")
             hero_frame.pack_propagate(False)
+
+            # Bind mousewheel to hero frame
+            hero_frame.bind("<MouseWheel>", self._on_mousewheel)
+
+            # Left side - hero name and category
+            left_frame = tk.Frame(hero_frame, bg="#2a2a2a")
+            left_frame.pack(side="left", fill="both", expand=True)
+            left_frame.bind("<MouseWheel>", self._on_mousewheel)
 
             hero_text = f"📁 {item.hero_name}"
             if item.category != "MISC":
                 hero_text += f" [{item.category}]"
 
             hero_lbl = tk.Label(
-                hero_frame,
+                left_frame,
                 text=hero_text,
                 fg="#ffffff",
                 bg="#2a2a2a",
                 font=("Exocet", 11, "bold"),
             )
             hero_lbl.pack(pady=4)
+            hero_lbl.bind("<MouseWheel>", self._on_mousewheel)
+
+            # Right side - delete button (X)
+            delete_btn = tk.Button(
+                hero_frame,
+                text="✕",
+                fg="#ff6666",
+                bg="#2a2a2a",
+                font=("Arial", 10, "bold"),
+                bd=0,
+                cursor="hand2",
+                activebackground="#3a3a3a",
+                activeforeground="#ff9999",
+                command=lambda itm=item: self._delete_item(itm),
+            )
+            delete_btn.pack(side="right", padx=(0, 5), pady=2)
+            delete_btn.bind("<MouseWheel>", self._on_mousewheel)
 
             # Item text with color coding and auto height
             item_text = tk.Text(
@@ -316,6 +502,9 @@ class ItemCatalogTab(ttk.Frame):
                 state="disabled",
                 cursor="arrow",
             )
+
+            # Bind mousewheel to item text widget
+            item_text.bind("<MouseWheel>", self._on_mousewheel)
 
             item_text.tag_configure(
                 "linegap",

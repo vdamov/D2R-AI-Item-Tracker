@@ -25,7 +25,21 @@ class App(tk.Tk):
         super().__init__()
         self.iconbitmap(asset_path("images/icon-color.ico"))
         self.title(APP_TITLE)
-        self.geometry("900x700")
+        
+        # Set window size
+        window_width = 900
+        window_height = 700
+        
+        # Get screen dimensions
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # Calculate center position
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        # Set geometry with centered position
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
         self.minsize(800, 600)
         
         apply_dark_theme(self)

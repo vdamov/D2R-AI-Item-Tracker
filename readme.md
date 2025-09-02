@@ -24,7 +24,7 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 4. **Clean Results**: Automatically removes UI clutter and formats the output
 5. **Save to File**: All items saved to a single text file, separated by `---`
 
-### Item List Tab  
+### Item Catalog Tab  
 1. **Load Items**: Import your processed item text files
 2. **Smart Search**: Find items by name, stats, or character name
 3. **Category Filter**: Filter by item type (weapons, armor, charms, etc.)
