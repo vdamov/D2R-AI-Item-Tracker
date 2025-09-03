@@ -8,10 +8,13 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 
 - **Batch Processing**: Process hundreds of item screenshots automatically
 - **Smart OCR**: Uses AI vision models to accurately read item tooltips
-- **Clean Output**: Removes UI elements like "Ctrl + Left Click to Move" and set item lists
+- **Clean Output**: Removes UI elements like “Ctrl + Left Click to Move”, set lists, and similar boilerplate
 - **Item Categorization**: Automatically categorizes items (WEAPON, ARMOR, RING, etc.)
 - **Searchable Database**: Browse and filter your entire item collection
-- **Persistent Cache**: Your item lists are saved between app sessions
+- **Virtualized Catalog**: Smooth, infinite-like scrolling for large lists (350+ items)
+- **Debounced Search**: Filters update after you pause typing for a smoother feel
+- **Persistent Settings**: Your Item Tracker settings are auto-saved and restored
+- **Parallel Workers**: Tune Workers to control how many requests run in parallel
 
 ---
 
@@ -19,15 +22,18 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
 
 ### Item Tracker Tab
 1. **Point to Screenshots**: Select your D2R screenshots folder
-2. **Configure API**: Set up your vision AI service (Groq recommended - it's free!)
+2. **Configure API**: Set up your vision AI service (Groq recommended - it's free!). After you set Endpoint, Model, and API Key, configure:
+- **Workers** – How many screenshots to process in parallel (1–10). Higher = faster but more likely to hit provider rate limits.
+- **Rate Limit RPM & Jitter** – Keep within your provider’s limits.
 3. **Batch Process**: The AI reads each screenshot and extracts the item text
 4. **Clean Results**: Automatically removes UI clutter and formats the output
 5. **Save to File**: All items saved to a single text file, separated by `---`
 
 ### Item Catalog Tab  
 1. **Load Items**: Import your processed item text files
-2. **Smart Search**: Find items by name, stats, or character name
+2. **Smart Search**: Type to search; results update after ~0.3s pause
 3. **Category Filter**: Filter by item type (weapons, armor, charms, etc.)
+4. **Virtualized Scrolling**: The list renders only visible items, so it stays smooth even with very large collections
 
 **See the [`examples/` folder](https://github.com/vdamov/D2R-AI-Item-Tracker/tree/main/example)** for sample screenshots and their expected output format.
 
@@ -56,8 +62,6 @@ Batch-extract **Diablo II: Resurrected** item tooltips from screenshots using a 
    - Choose a folder containing your `.txt` exports (where `output.txt` is saved)
    - Click **Load Items**
    - Use the **Search** box and **Item Type** dropdown to filter your collection
-
-> **Tip**: Use **File → Save .env** to store your settings for next time. Use **File → Load .env** to restore them.
 
 ---
 
@@ -167,7 +171,10 @@ Any **OpenAI-compatible** vision API will work:
 - The app auto-fallbacks to: `%LOCALAPPDATA%\D2R-AI-Item-Tracker\`
 
 ### Rate Limiting  
-Keep **Rate Limit RPM** reasonable (e.g., 30) and **Jitter** > 0 to avoid 429 errors.
+* If you see many **429** errors:
+  * Lower **Workers** and/or **Rate Limit (RPM)**.
+  * Keep **Jitter** > 0 to stagger calls.
+  * The app **automatically re-queues** 429’d screenshots for a later attempt.
 
 ### Missing Items Cache
 Items are automatically cached in `%LOCALAPPDATA%\D2R-AI-Item-Tracker\`. Use **Clear List** to reset.

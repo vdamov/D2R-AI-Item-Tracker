@@ -3,7 +3,7 @@
 import pickle
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from config import CACHE_FILE, SETTINGS_CACHE_FILE
 from models import Item
@@ -54,15 +54,48 @@ def load_items_cache() -> Tuple[List[Item], str]:
         return [], ""
 
 
+def save_settings_cache(settings: Dict[str, Any]):
+    """Save application settings to cache file."""
+    try:
+        SETTINGS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SETTINGS_CACHE_FILE, "wb") as f:
+            pickle.dump(settings, f)
+    except Exception as e:
+        print(f"Error saving settings cache: {e}")
+
+
+def load_settings_cache() -> Dict[str, Any]:
+    """Load application settings from cache file."""
+    try:
+        if not SETTINGS_CACHE_FILE.exists():
+            return {}
+        
+        with open(SETTINGS_CACHE_FILE, "rb") as f:
+            return pickle.load(f)
+    except Exception as e:
+        print(f"Error loading settings cache: {e}")
+        return {}
+
+
 def clear_items_cache():
     """Delete cache files."""
+    try:
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+        # Note: We don't clear settings cache here
+    except Exception as e:
+        print(f"Error clearing cache: {e}")
+
+
+def clear_all_cache():
+    """Delete all cache files including settings."""
     try:
         if CACHE_FILE.exists():
             CACHE_FILE.unlink()
         if SETTINGS_CACHE_FILE.exists():
             SETTINGS_CACHE_FILE.unlink()
     except Exception as e:
-        print(f"Error clearing cache: {e}")
+        print(f"Error clearing all cache: {e}")
 
 
 def load_items_from_folder(folder_path: str) -> List[Item]:
@@ -101,38 +134,6 @@ def load_items_from_folder(folder_path: str) -> List[Item]:
         except Exception as e:
             print(f"Error reading {txt_file}: {e}")
 
-    return items
-
-
-def load_items_from_folder(folder_path: str) -> List[Item]:
-    """Load all items from text files in a folder."""
-    items = []
-    folder = Path(folder_path)
-    if not folder.exists() or not folder.is_dir():
-        return items
-    for txt_file in folder.glob("*.txt"):
-        try:
-            content = txt_file.read_text(encoding="utf-8")
-            item_texts = content.split("---")
-            for item_text in item_texts:
-                item_text = item_text.strip()
-                if not item_text:
-                    continue
-                # Parse category if present (from new OCR output)
-                category = "MISC"
-                category_match = re.search(
-                    r"\[CATEGORY:\s*(\w+)\]", item_text, re.IGNORECASE
-                )
-                if category_match:
-                    category = category_match.group(1).upper()
-                    # Remove category line from display text
-                    item_text = re.sub(
-                        r"\[CATEGORY:\s*\w+\]", "", item_text, flags=re.IGNORECASE
-                    ).strip()
-                if item_text:  # Only add if there's actual item text after cleaning
-                    items.append(Item(item_text, str(txt_file), category))
-        except Exception as e:
-            print(f"Error reading {txt_file}: {e}")
     return items
 
 
